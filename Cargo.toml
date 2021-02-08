@@ -1,0 +1,16 @@
+[package]
+name = "tunneler-core"
+version = "0.1.0"
+authors = ["lol3rrr <s.loler03@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+log = { version = "0.4.11" }
+rand = { version = "0.7.0", features = ["getrandom"] }
+dashmap = { version = "4.0.2" }
+rsa = { version = "0.3.0" }
+base64 = { version = "0.13.0" }
+tokio = { version = "1.1.1", features = ["rt", "net", "io-util", "sync", "time"] }
+fnv = { version = "1.0.7" }
