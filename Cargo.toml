@@ -3,6 +3,8 @@ name = "tunneler-core"
 version = "0.1.0"
 authors = ["lol3rrr <s.loler03@gmail.com>"]
 edition = "2018"
+license = "MIT"
+description = "Provides the Core functionality for the Tunneler software"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
