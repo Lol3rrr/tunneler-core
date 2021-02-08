@@ -16,3 +16,11 @@ rsa = { version = "0.3.0" }
 base64 = { version = "0.13.0" }
 tokio = { version = "1.1.1", features = ["rt", "net", "io-util", "sync", "time"] }
 fnv = { version = "1.0.7" }
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "Benchmark"
+harness = false
+path = "./benches/benchmark.rs"
