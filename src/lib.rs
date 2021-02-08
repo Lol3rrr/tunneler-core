@@ -7,7 +7,10 @@
 /// Provides all the Client related functionality
 pub mod client;
 mod connections;
-pub(crate) mod message;
+pub use connections::Destination;
+/// Messages are used for all Communication between Server and Client
+pub mod message;
 /// Provides all the Server related functionality
 pub mod server;
-mod streams;
+/// Provides all the Stream/Queue related functionality
+pub mod streams;
