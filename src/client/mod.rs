@@ -1,4 +1,5 @@
 mod client;
 pub use client::*;
 
-mod queues;
+/// Contains all the Streams/Queues used by the client
+pub mod queues;
