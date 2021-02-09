@@ -1,3 +1,4 @@
+/// Describes a simple external Address consisting of an IP and Port
 #[derive(Clone)]
 pub struct Destination {
     ip: String,
@@ -6,6 +7,7 @@ pub struct Destination {
 }
 
 impl Destination {
+    /// Creates a new Destination from the given data
     pub fn new(ip: String, port: u32) -> Self {
         let formatted_ip = format!("{}:{}", ip, port);
 
@@ -16,19 +18,24 @@ impl Destination {
         }
     }
 
+    /// Tries to connect to the described Destination and returns
+    /// the TCP-Stream that was established
     pub async fn connect(&self) -> std::io::Result<tokio::net::TcpStream> {
         let stream = tokio::net::TcpStream::connect(&self.formatted).await?;
 
         Ok(stream)
     }
 
+    /// Returns the full address to connect to
     pub fn get_full_address(&self) -> &str {
         &self.formatted
     }
 
+    /// Returns the Raw-IP of the Destination
     pub fn get_ip(&self) -> &str {
         &self.ip
     }
+    /// Returns the Port of the Destination
     pub fn get_port(&self) -> u32 {
         self.port
     }

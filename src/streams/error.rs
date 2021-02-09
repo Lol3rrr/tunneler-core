@@ -1,6 +1,10 @@
+/// The Error that could be returned when trying to send something
 #[derive(Debug, PartialEq)]
 pub enum SendError {
+    /// The Streams buffer was already full
     Full,
+    /// The Stream was closed, either by shutting it down or dropping all
+    /// receivers
     Closed,
 }
 
@@ -23,8 +27,10 @@ impl<T> From<tokio::sync::mpsc::error::SendError<T>> for SendError {
     }
 }
 
+/// The Error that could be returned when trying to read from a stream
 #[derive(Debug, PartialEq)]
 pub enum RecvError {
+    /// The Stream was already closed
     Closed,
 }
 

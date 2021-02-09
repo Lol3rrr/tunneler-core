@@ -48,6 +48,7 @@ where
     }
 }
 
+/// Creates a new Stream pair
 pub fn stream<T>() -> (StreamWriter<T>, StreamReader<T>)
 where
     T: Send,

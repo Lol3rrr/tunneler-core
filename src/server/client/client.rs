@@ -219,12 +219,7 @@ impl Client {
             match header.get_kind() {
                 MessageType::Data => {}
                 MessageType::Close => {
-                    match user_cons.remove(header.get_id()) {
-                        Some(_) => {}
-                        None => {
-                            error!("[{}][{}] Could not remove Connection", id, header.get_id());
-                        }
-                    };
+                    user_cons.remove(header.get_id());
                     continue;
                 }
                 _ => {
@@ -243,7 +238,6 @@ impl Client {
             let stream = match user_cons.get(header.get_id()) {
                 Some(s) => s,
                 None => {
-                    error!("[{}] No Connection found with ID: {}", id, header.get_id());
                     // TODO
                     // This also then needs to drain the next data that belongs to
                     // this incorrect request as this otherwise it will bring
