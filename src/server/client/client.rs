@@ -15,14 +15,14 @@ pub struct Client {
     id: u32,
     user_cons: Connections<mpsc::StreamWriter<Message>>,
     client_manager: std::sync::Arc<ClientManager>,
-    client_send_queue: tokio::sync::mpsc::UnboundedSender<Message>,
+    client_send_queue: tokio::sync::mpsc::Sender<Message>,
 }
 
 impl Client {
     pub fn new(
         id: u32,
         client_manager: std::sync::Arc<ClientManager>,
-        send_queue: tokio::sync::mpsc::UnboundedSender<Message>,
+        send_queue: tokio::sync::mpsc::Sender<Message>,
     ) -> Client {
         Client {
             id,
@@ -44,13 +44,13 @@ impl Client {
         user_id: u32,
         client_id: u32,
         user_cons: Connections<mpsc::StreamWriter<Message>>,
-        send_queue: tokio::sync::mpsc::UnboundedSender<Message>,
+        send_queue: tokio::sync::mpsc::Sender<Message>,
     ) {
         user_cons.remove(user_id);
 
         let header = MessageHeader::new(user_id, MessageType::Close, 0);
         let msg = Message::new(header, vec![0; 0]);
-        match send_queue.send(msg) {
+        match send_queue.send(msg).await {
             Ok(_) => {}
             Err(e) => {
                 error!("[{}][{}] Sending Close Message: {}", client_id, user_id, e);
@@ -125,7 +125,7 @@ impl Client {
         client_id: u32,
         user_id: u32,
         mut con: tokio::net::tcp::OwnedReadHalf,
-        send_queue: tokio::sync::mpsc::UnboundedSender<Message>,
+        send_queue: tokio::sync::mpsc::Sender<Message>,
         user_cons: Connections<mpsc::StreamWriter<Message>>,
     ) {
         // Reads and forwards all the data from the socket to the client
@@ -145,7 +145,7 @@ impl Client {
                     let msg = Message::new(header, buf);
 
                     // Puts the message in the queue to be send to the client
-                    match send_queue.send(msg) {
+                    match send_queue.send(msg).await {
                         Ok(_) => {}
                         Err(e) => {
                             error!(
@@ -276,7 +276,7 @@ impl Client {
     pub async fn sender(
         id: u32,
         mut write_con: tokio::net::tcp::OwnedWriteHalf,
-        mut queue: tokio::sync::mpsc::UnboundedReceiver<Message>,
+        mut queue: tokio::sync::mpsc::Receiver<Message>,
         client_manager: std::sync::Arc<ClientManager>,
     ) {
         loop {
@@ -286,7 +286,7 @@ impl Client {
                     error!("[{}][Sender] Receiving Message from Queue", id);
                     let client_count = client_manager.remove_con(id);
                     info!("Connected Clients: {}", client_count);
-                    return;
+                    continue;
                 }
             };
 

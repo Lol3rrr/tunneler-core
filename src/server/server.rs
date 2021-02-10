@@ -45,8 +45,8 @@ impl Server {
 
         let clients = std::sync::Arc::new(ClientManager::new());
 
-        info!("Listening for clients on: {}", listen_bind_addr);
-        info!("Listening for requests on: {}", req_bind_addr);
+        info!("Listening for Clients on: {}", listen_bind_addr);
+        info!("Listening for User on: {}", req_bind_addr);
 
         // Task to async accept new clients
         tokio::task::spawn(accept_clients::accept_clients(
