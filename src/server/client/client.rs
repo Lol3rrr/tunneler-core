@@ -286,7 +286,7 @@ impl Client {
                     error!("[{}][Sender] Receiving Message from Queue", id);
                     let client_count = client_manager.remove_con(id);
                     info!("Connected Clients: {}", client_count);
-                    continue;
+                    return;
                 }
             };
 
