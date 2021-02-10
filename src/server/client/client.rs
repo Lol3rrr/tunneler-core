@@ -130,7 +130,8 @@ impl Client {
     ) {
         // Reads and forwards all the data from the socket to the client
         loop {
-            let mut buf = vec![0; 4092];
+            let mut buf = vec![0; 2048];
+
             // Try to read data from the user
             //
             // this may still fail with `WouldBlock` if the readiness event is
