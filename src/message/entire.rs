@@ -18,7 +18,7 @@ impl Message {
 
     /// Serializes the Message into a Vector of Bytes that can
     /// then be send over to the other side (Server or Client)
-    pub fn serialize<'a>(&'a self) -> ([u8; 13], &'a [u8]) {
+    pub fn serialize(&self) -> ([u8; 13], &[u8]) {
         let data = &self.data;
         let data_length = self.header.get_length() as usize;
 
