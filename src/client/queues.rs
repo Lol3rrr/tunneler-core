@@ -2,7 +2,7 @@ use crate::connections::Connections;
 use crate::message::{Message, MessageHeader, MessageType};
 use crate::streams::mpsc;
 
-use log::error;
+use log::{debug, error};
 
 /// Handles all the sending related to a single user-connection
 /// as well as the correct clean up handling once this is dropped
@@ -42,10 +42,13 @@ impl Sender {
 impl Drop for Sender {
     fn drop(&mut self) {
         self.total_client_cons.remove(self.id);
+        debug!("[Sender][{}] Removed Connection", self.id);
 
         let close_msg = Message::new(MessageHeader::new(self.id, MessageType::Close, 0), vec![]);
         match self.tx.send(close_msg) {
-            Ok(_) => {}
+            Ok(_) => {
+                debug!("[Sender][{}] Sent Close", self.id);
+            }
             Err(e) => {
                 error!("Sending Close-Message for {}: {}", self.id, e);
             }
