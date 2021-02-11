@@ -25,7 +25,7 @@ where
 
 /// The Writer Part of a simple Message-Stream that
 /// can be used to quickly pass messages around
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct StreamWriter<T> {
     sender: tokio::sync::mpsc::UnboundedSender<T>,
 }

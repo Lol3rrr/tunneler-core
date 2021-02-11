@@ -1,5 +1,6 @@
 use tokio::net::TcpStream;
 
+#[derive(Debug)]
 pub struct Connection {
     stream: TcpStream,
 }

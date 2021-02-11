@@ -10,7 +10,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 /// This Client represents a single Connection a Client Instance
 ///
 /// All User-Connections are handled by an instance of this Struct
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Client {
     id: u32,
     user_cons: Connections<mpsc::StreamWriter<Message>>,
@@ -219,4 +219,14 @@ impl Client {
             };
         }
     }
+}
+
+#[test]
+fn new_client() {
+    let manager_arc = std::sync::Arc::new(ClientManager::new());
+    let (tx, _rx) = tokio::sync::mpsc::channel(10);
+
+    let client = Client::new(123, manager_arc, tx);
+
+    assert_eq!(123, client.get_id());
 }

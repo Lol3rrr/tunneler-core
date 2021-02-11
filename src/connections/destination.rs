@@ -1,5 +1,5 @@
 /// Describes a simple external Address consisting of an IP and Port
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Destination {
     ip: String,
     port: u32,

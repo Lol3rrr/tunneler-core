@@ -1,5 +1,6 @@
 use dashmap::DashMap;
 
+#[derive(Debug)]
 pub struct Connections<T> {
     connections: std::sync::Arc<DashMap<u32, T, fnv::FnvBuildHasher>>,
 }
