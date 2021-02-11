@@ -1,7 +1,7 @@
 use crate::connections::Connections;
 use crate::message::{Message, MessageHeader, MessageType};
 use crate::server::client::ClientManager;
-use crate::streams::error::RecvError;
+use crate::server::user;
 use crate::streams::mpsc;
 
 use log::{debug, error, info};
@@ -19,6 +19,7 @@ pub struct Client {
 }
 
 impl Client {
+    /// Creates a new Client that is then ready to start up
     pub fn new(
         id: u32,
         client_manager: std::sync::Arc<ClientManager>,
@@ -32,10 +33,12 @@ impl Client {
         }
     }
 
+    /// The Client-ID itself
     pub fn get_id(&self) -> u32 {
         self.id
     }
 
+    /// Returns the Connections managed by this Client
     pub fn get_user_cons(&self) -> Connections<mpsc::StreamWriter<Message>> {
         self.user_cons.clone()
     }
@@ -68,108 +71,22 @@ impl Client {
         let (tx, rx) = mpsc::stream();
         self.user_cons.set(user_id, tx);
 
-        tokio::task::spawn(Self::send_user_connection(self.id, user_id, write_con, rx));
-        tokio::task::spawn(Self::recv_user_connection(
+        let client_id = self.id;
+        tokio::task::spawn(user::send(client_id, user_id, write_con, rx));
+        let cloned_cons = self.user_cons.clone();
+        let send_queue = self.client_send_queue.clone();
+        tokio::task::spawn(user::recv(
             self.id,
             user_id,
             read_con,
             self.client_send_queue.clone(),
-            self.user_cons.clone(),
+            async move {
+                Client::close_user_connection(user_id, client_id, cloned_cons, send_queue).await;
+            },
         ));
     }
 
-    /// Reads messages from the Client for this User and sends them to the User
-    ///
-    /// Params:
-    /// * client_id: The ID of the client that handles this
-    /// * user_id: The ID of the User for this connection
-    /// * con: The User-Connection
-    /// * queue: The Queue for messages that need to be send to the user
-    async fn send_user_connection(
-        client_id: u32,
-        user_id: u32,
-        mut con: tokio::net::tcp::OwnedWriteHalf,
-        mut queue: mpsc::StreamReader<Message>,
-    ) {
-        loop {
-            let msg = match queue.recv().await {
-                Ok(m) => m,
-                Err(e) => {
-                    if e != RecvError::Closed {
-                        error!("[{}][{}] Receiving from Queue: {}", client_id, user_id, e);
-                    }
-                    return;
-                }
-            };
-
-            let data = msg.get_data();
-            match con.write_all(&data).await {
-                Ok(_) => {}
-                Err(e) => {
-                    error!("[{}][{}] Sending to User: {}", client_id, user_id, e);
-                    return;
-                }
-            };
-        }
-    }
-
-    /// Reads from a new User-Connection and sends it to the client
-    ///
-    /// Params:
-    /// * client: The Server-Client to use
-    /// * id: The ID of the user-connection
-    /// * con: The User-Connection
-    /// * send_queue: The Queue for requests going out to the Client
-    /// * user_cons: The User-Connections belonging to this Client
-    async fn recv_user_connection(
-        client_id: u32,
-        user_id: u32,
-        mut con: tokio::net::tcp::OwnedReadHalf,
-        send_queue: tokio::sync::mpsc::Sender<Message>,
-        user_cons: Connections<mpsc::StreamWriter<Message>>,
-    ) {
-        // Reads and forwards all the data from the socket to the client
-        loop {
-            let mut buf = vec![0; 2048];
-
-            // Try to read data from the user
-            //
-            // this may still fail with `WouldBlock` if the readiness event is
-            // a false positive.
-            match con.read(&mut buf).await {
-                Ok(0) => {
-                    break;
-                }
-                Ok(n) => {
-                    // Package the Users-Data in a new custom-message
-                    let header = MessageHeader::new(user_id, MessageType::Data, n as u64);
-                    let msg = Message::new(header, buf);
-
-                    // Puts the message in the queue to be send to the client
-                    match send_queue.send(msg).await {
-                        Ok(_) => {}
-                        Err(e) => {
-                            error!(
-                                "[{}][{}] Forwarding message to client: {}",
-                                client_id, user_id, e
-                            );
-                            break;
-                        }
-                    };
-                }
-                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    continue;
-                }
-                Err(e) => {
-                    error!("[{}][{}] Reading from User-Con: {}", client_id, user_id, e);
-                    break;
-                }
-            }
-        }
-
-        Client::close_user_connection(user_id, client_id, user_cons, send_queue).await;
-    }
-
+    /// Drains `size` amount of bytes from the Connection
     async fn drain(read_con: &mut tokio::net::tcp::OwnedReadHalf, size: usize) {
         let mut tmp_buf = vec![0; size];
         match read_con.read_exact(&mut tmp_buf).await {
@@ -187,6 +104,7 @@ impl Client {
     /// * id: The ID of the Client
     /// * read_con: The Reader-Half of the Client-Connection
     /// * user_cons: The User-Connections
+    /// * client_manager: The Manager for this client
     pub async fn receiver(
         id: u32,
         mut read_con: tokio::net::tcp::OwnedReadHalf,
@@ -212,15 +130,14 @@ impl Client {
                 }
             };
 
-            if let MessageType::Heartbeat = header.get_kind() {
-                debug!("[{}] Received Heartbeat", id);
-                continue;
-            }
-
             match header.get_kind() {
                 MessageType::Data => {}
                 MessageType::Close => {
                     user_cons.remove(header.get_id());
+                    continue;
+                }
+                MessageType::Heartbeat => {
+                    debug!("[{}] Received Heartbeat", id);
                     continue;
                 }
                 _ => {
@@ -235,14 +152,14 @@ impl Client {
                 }
             };
 
+            let user_id = header.get_id();
+
             // Forwarding the message to the actual user
-            let stream = match user_cons.get(header.get_id()) {
+            let stream = match user_cons.get(user_id) {
                 Some(s) => s,
                 None => {
-                    // TODO
-                    // This also then needs to drain the next data that belongs to
-                    // this incorrect request as this otherwise it will bring
-                    // everyting else out of order as well
+                    // Removes this message and drain all the Data belonging to this message
+                    // as well
                     Client::drain(&mut read_con, header.get_length() as usize).await;
                     continue;
                 }
@@ -253,11 +170,10 @@ impl Client {
             match read_con.read_exact(&mut body_buf).await {
                 Ok(_) => {}
                 Err(e) => {
-                    error!("[{}][{}] Reading from Client: {}", id, header.get_id(), e);
+                    error!("[{}][{}] Reading Body from Client: {}", id, user_id, e);
                 }
             };
 
-            let user_id = header.get_id();
             match stream.send(Message::new(header, body_buf)) {
                 Ok(_) => {}
                 Err(e) => {
@@ -274,6 +190,7 @@ impl Client {
     /// * id: The ID of the Client
     /// * write_con: The Write-Half of the Client-Connection
     /// * queue: The Queue of messages to forward to the Client
+    /// * client_manager: The Client-Manager
     pub async fn sender(
         id: u32,
         mut write_con: tokio::net::tcp::OwnedWriteHalf,
@@ -292,10 +209,9 @@ impl Client {
             };
 
             let data = msg.serialize();
-            let total_data_length = data.len();
             match write_con.write_all(&data).await {
                 Ok(_) => {
-                    debug!("[{}][Sender] Send {} out bytes", id, total_data_length);
+                    debug!("[{}][Sender] Send out Message", id);
                 }
                 Err(e) => {
                     error!("[{}][Sender] Sending Message: {}", id, e);
