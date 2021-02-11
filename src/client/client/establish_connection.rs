@@ -59,7 +59,15 @@ pub async fn establish_connection(adr: &str, key: &[u8]) -> Option<std::sync::Ar
     let msg_header = MessageHeader::new(0, MessageType::Verify, encrypted_key.len() as u64);
     let msg = Message::new(msg_header, encrypted_key);
 
-    match connection_arc.write_raw(&msg.serialize()).await {
+    let (h_data, data) = msg.serialize();
+    match connection_arc.write_total(&h_data, h_data.len()).await {
+        Ok(_) => {}
+        Err(e) => {
+            error!("Sending Encrypted Key/Password: {}", e);
+            return None;
+        }
+    };
+    match connection_arc.write_total(&data, data.len()).await {
         Ok(_) => {}
         Err(e) => {
             error!("Sending Encrypted Key/Password: {}", e);

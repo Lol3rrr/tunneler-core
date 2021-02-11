@@ -29,7 +29,14 @@ pub async fn validate_connection(con: &mut tokio::net::TcpStream, key: &[u8]) ->
     let msg_header = MessageHeader::new(0, MessageType::Key, data.len() as u64);
     let msg = Message::new(msg_header, data);
 
-    let data = msg.serialize();
+    let (h_data, data) = msg.serialize();
+    match con.write_all(&h_data).await {
+        Ok(_) => {}
+        Err(e) => {
+            error!("Sending Key: {}", e);
+            return false;
+        }
+    };
     match con.write_all(&data).await {
         Ok(_) => {}
         Err(e) => {

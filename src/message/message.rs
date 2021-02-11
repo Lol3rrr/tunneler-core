@@ -18,19 +18,11 @@ impl Message {
 
     /// Serializes the Message into a Vector of Bytes that can
     /// then be send over to the other side (Server or Client)
-    pub fn serialize(&self) -> Vec<u8> {
+    pub fn serialize<'a>(&'a self) -> ([u8; 13], &'a [u8]) {
         let data = &self.data;
         let data_length = self.header.get_length() as usize;
 
-        let mut output = vec![0; 13 + data_length];
-
-        let header = self.header.serialize();
-
-        output[0..13].copy_from_slice(&header);
-        let copy_end = 13 + data_length;
-        output[13..copy_end].copy_from_slice(&data[0..data_length]);
-
-        output
+        (self.header.serialize(), &data[0..data_length])
     }
 
     /// The Header of this message
@@ -48,22 +40,26 @@ fn message_serialize_connect() {
     let mut inner_data = vec![0; 4092];
     inner_data[0] = 1;
     inner_data[1] = 1;
-    let output = Message {
+    let msg = Message {
         header: MessageHeader {
             id: 13,
             kind: MessageType::Connect,
             length: 2,
         },
         data: inner_data,
-    }
-    .serialize();
+    };
 
-    let mut expected = vec![0; 15];
-    expected[0] = 13;
-    expected[5] = 2;
-    expected[13] = 1;
-    expected[14] = 1;
-    assert_eq!(expected, output);
+    let (h_output, d_output) = msg.serialize();
+
+    let mut expected_header = [0; 13];
+    expected_header[0] = 13;
+    expected_header[5] = 2;
+    assert_eq!(expected_header, h_output);
+
+    let mut expected_data = vec![0; 2];
+    expected_data[0] = 1;
+    expected_data[1] = 1;
+    assert_eq!(expected_data, d_output);
 }
 #[test]
 fn message_serialize_data() {
@@ -77,12 +73,15 @@ fn message_serialize_data() {
         data: inner_data,
     };
     msg.data[2] = 33;
-    let output = msg.serialize();
+    let (h_output, d_output) = msg.serialize();
 
-    let mut expected = vec![0; 25];
-    expected[0] = 13;
-    expected[4] = 2;
-    expected[5] = 12;
-    expected[15] = 33;
-    assert_eq!(expected, output);
+    let mut header_expect = [0; 13];
+    header_expect[0] = 13;
+    header_expect[4] = 2;
+    header_expect[5] = 12;
+    assert_eq!(header_expect, h_output);
+
+    let mut data_expect = vec![0; 12];
+    data_expect[2] = 33;
+    assert_eq!(&data_expect, d_output);
 }

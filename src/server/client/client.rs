@@ -173,7 +173,7 @@ impl Client {
                 }
             };
 
-            match stream.send(Message::new(header, body_buf)) {
+            match stream.send(Message::new(header, body_buf)).await {
                 Ok(_) => {}
                 Err(e) => {
                     error!("[{}][{}] Adding to User-Queue: {}", id, user_id, e);
@@ -206,17 +206,24 @@ impl Client {
                 }
             };
 
-            let data = msg.serialize();
-            match write_con.write_all(&data).await {
-                Ok(_) => {
-                    debug!("[{}][Sender] Send out Message", id);
-                }
+            let (h_data, data) = msg.serialize();
+            match write_con.write_all(&h_data).await {
+                Ok(_) => {}
                 Err(e) => {
                     error!("[{}][Sender] Sending Message: {}", id, e);
                     client_manager.remove(id);
                     return;
                 }
             };
+            match write_con.write_all(&data).await {
+                Ok(_) => {}
+                Err(e) => {
+                    error!("[{}][Sender] Sending Message: {}", id, e);
+                    client_manager.remove(id);
+                    return;
+                }
+            };
+            debug!("[{}][Sender] Sent out Message", id);
         }
     }
 }

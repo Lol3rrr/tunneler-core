@@ -29,14 +29,14 @@ impl Client {
     }
 
     async fn heartbeat(
-        send_queue: tokio::sync::mpsc::UnboundedSender<Message>,
+        send_queue: tokio::sync::mpsc::Sender<Message>,
         wait_time: std::time::Duration,
     ) {
         loop {
             let msg_header = MessageHeader::new(0, MessageType::Heartbeat, 0);
             let msg = Message::new(msg_header, Vec::new());
 
-            match send_queue.send(msg) {
+            match send_queue.send(msg).await {
                 Ok(_) => {
                     debug!("[Heartbeat] Sent");
                 }
@@ -53,7 +53,7 @@ impl Client {
     /// Sends all the messages to the server
     async fn sender(
         server_con: std::sync::Arc<Connection>,
-        mut queue: tokio::sync::mpsc::UnboundedReceiver<Message>,
+        mut queue: tokio::sync::mpsc::Receiver<Message>,
     ) {
         loop {
             let msg = match queue.recv().await {
@@ -64,13 +64,22 @@ impl Client {
                 }
             };
 
-            let data = msg.serialize();
-            let total_data_length = data.len();
-
-            match server_con.write_total(&data, total_data_length).await {
-                Ok(_) => {}
+            let (h_data, data) = msg.serialize();
+            match server_con.write_total(&h_data, h_data.len()).await {
+                Ok(_) => {
+                    debug!("Sent Header");
+                }
                 Err(e) => {
-                    error!("Sending Message: {}", e);
+                    error!("Sending Header: {}", e);
+                    return;
+                }
+            };
+            match server_con.write_total(data, data.len()).await {
+                Ok(_) => {
+                    debug!("Sent Data");
+                }
+                Err(e) => {
+                    error!("Sending Data: {}", e);
                     return;
                 }
             };
@@ -83,12 +92,9 @@ impl Client {
     /// If there is no matching queue, it creates and starts a new client,
     /// which will then be placed into the Connection Manager for further
     /// requests
-    ///
-    ///
-    ///
     async fn receiver<F, Fut, T>(
         server_con: std::sync::Arc<Connection>,
-        send_queue: tokio::sync::mpsc::UnboundedSender<Message>,
+        send_queue: tokio::sync::mpsc::Sender<Message>,
         client_cons: std::sync::Arc<Connections<mpsc::StreamWriter<Message>>>,
         handler: &F,
         handler_data: &Option<T>,
@@ -155,7 +161,7 @@ impl Client {
                 }
             };
 
-            match con_queue.send(msg) {
+            match con_queue.send(msg).await {
                 Ok(_) => {}
                 Err(e) => {
                     error!("[Receiver][{}] Adding to Queue: {}", id, e);
@@ -223,7 +229,7 @@ impl Client {
 
             attempts = 0;
 
-            let (queue_tx, queue_rx) = tokio::sync::mpsc::unbounded_channel();
+            let (queue_tx, queue_rx) = tokio::sync::mpsc::channel(30);
             let outgoing = std::sync::Arc::new(Connections::<mpsc::StreamWriter<Message>>::new());
 
             tokio::task::spawn(Self::sender(connection_arc.clone(), queue_rx));

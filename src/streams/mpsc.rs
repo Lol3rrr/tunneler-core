@@ -3,14 +3,14 @@ use crate::streams::error::{RecvError, SendError};
 /// The Reader Part of a simple Message-Stream that
 /// can be used to quickly pass messages around
 pub struct StreamReader<T> {
-    reader: tokio::sync::mpsc::UnboundedReceiver<T>,
+    reader: tokio::sync::mpsc::Receiver<T>,
 }
 
 impl<T> StreamReader<T>
 where
     T: Send,
 {
-    fn new(rx: tokio::sync::mpsc::UnboundedReceiver<T>) -> Self {
+    fn new(rx: tokio::sync::mpsc::Receiver<T>) -> Self {
         Self { reader: rx }
     }
 
@@ -27,7 +27,7 @@ where
 /// can be used to quickly pass messages around
 #[derive(Clone, Debug)]
 pub struct StreamWriter<T> {
-    sender: tokio::sync::mpsc::UnboundedSender<T>,
+    sender: tokio::sync::mpsc::Sender<T>,
 }
 
 impl<T> StreamWriter<T>
@@ -35,13 +35,23 @@ where
     T: Send,
 {
     /// Creates a new Writer
-    fn new(tx: tokio::sync::mpsc::UnboundedSender<T>) -> Self {
+    fn new(tx: tokio::sync::mpsc::Sender<T>) -> Self {
         Self { sender: tx }
     }
 
     /// Adds the Data to the Queue/Stream
-    pub fn send(&self, data: T) -> Result<(), SendError> {
-        match self.sender.send(data) {
+    pub async fn send(&self, data: T) -> Result<(), SendError> {
+        match self.sender.send(data).await {
+            Ok(_) => Ok(()),
+            Err(e) => Err(SendError::from(e)),
+        }
+    }
+
+    /// Blocks until the message could be send
+    ///
+    /// Can only be called outside of the Tokio runtime
+    pub fn blocking_send(&self, data: T) -> Result<(), SendError> {
+        match self.sender.blocking_send(data) {
             Ok(_) => Ok(()),
             Err(e) => Err(SendError::from(e)),
         }
@@ -53,6 +63,6 @@ pub fn stream<T>() -> (StreamWriter<T>, StreamReader<T>)
 where
     T: Send,
 {
-    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let (tx, rx) = tokio::sync::mpsc::channel(25);
     (StreamWriter::new(tx), StreamReader::new(rx))
 }
