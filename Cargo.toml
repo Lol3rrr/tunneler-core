@@ -5,6 +5,7 @@ authors = ["lol3rrr <s.loler03@gmail.com>"]
 edition = "2018"
 license = "MIT"
 description = "Provides the Core functionality for the Tunneler software"
+repository = "https://github.com/Lol3rrr/tunneler-core"
 
 [features]
 default = ["client", "server"]
