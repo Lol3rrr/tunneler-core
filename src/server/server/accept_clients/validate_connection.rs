@@ -4,6 +4,8 @@ use rand::rngs::OsRng;
 use rsa::{PaddingScheme, PublicKeyParts, RSAPrivateKey, RSAPublicKey};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
+use log::error;
+
 // The validation flow is like this
 //
 // 1. Client connects
@@ -31,7 +33,7 @@ pub async fn validate_connection(con: &mut tokio::net::TcpStream, key: &[u8]) ->
     match con.write_all(&data).await {
         Ok(_) => {}
         Err(e) => {
-            println!("Error sending Key: {}", e);
+            error!("Sending Key: {}", e);
             return false;
         }
     };
@@ -47,7 +49,7 @@ pub async fn validate_connection(con: &mut tokio::net::TcpStream, key: &[u8]) ->
             msg.unwrap()
         }
         Err(e) => {
-            println!("Error reading validate: {}", e);
+            error!("Reading validate: {}", e);
             return false;
         }
     };
@@ -60,7 +62,7 @@ pub async fn validate_connection(con: &mut tokio::net::TcpStream, key: &[u8]) ->
     match con.read_exact(&mut recv_encrypted_key).await {
         Ok(_) => {}
         Err(e) => {
-            println!("Could not read key: {}", e);
+            error!("Could not read key: {}", e);
             return false;
         }
     };
@@ -68,7 +70,7 @@ pub async fn validate_connection(con: &mut tokio::net::TcpStream, key: &[u8]) ->
     let recv_key = match priv_key.decrypt(PaddingScheme::PKCS1v15Encrypt, &recv_encrypted_key) {
         Ok(raw_key) => raw_key,
         Err(e) => {
-            println!("Error decrypting received-key: {}", e);
+            error!("Decrypting received-key: {}", e);
             return false;
         }
     };
@@ -76,7 +78,7 @@ pub async fn validate_connection(con: &mut tokio::net::TcpStream, key: &[u8]) ->
     // Step 5
     if recv_key != key {
         // Step 5a
-        println!("The keys are not matching");
+        error!("The keys are not matching");
         return false;
     }
 
@@ -86,7 +88,7 @@ pub async fn validate_connection(con: &mut tokio::net::TcpStream, key: &[u8]) ->
     match con.write_all(&ack_data).await {
         Ok(_) => {}
         Err(e) => {
-            println!("Error sending acknowledge: {}", e);
+            error!("Error sending acknowledge: {}", e);
             return false;
         }
     };

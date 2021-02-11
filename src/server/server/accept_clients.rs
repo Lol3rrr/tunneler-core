@@ -45,7 +45,6 @@ pub async fn accept_clients(
             clients.clone(),
         ));
 
-        let n_client_count = clients.add(client);
-        info!("Connected Clients: {}", n_client_count);
+        clients.add(client);
     }
 }

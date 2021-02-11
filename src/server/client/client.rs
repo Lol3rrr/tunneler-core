@@ -4,7 +4,7 @@ use crate::server::client::ClientManager;
 use crate::server::user;
 use crate::streams::mpsc;
 
-use log::{debug, error, info};
+use log::{debug, error};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// This Client represents a single Connection a Client Instance
@@ -124,8 +124,7 @@ impl Client {
                 }
                 Err(e) => {
                     error!("[{}] Reading from Client-Connection: {}", id, e);
-                    let client_count = client_manager.remove_con(id);
-                    info!("Connected Clients: {}", client_count);
+                    client_manager.remove(id);
                     return;
                 }
             };
@@ -202,8 +201,7 @@ impl Client {
                 Some(m) => m,
                 None => {
                     error!("[{}][Sender] Receiving Message from Queue", id);
-                    let client_count = client_manager.remove_con(id);
-                    info!("Connected Clients: {}", client_count);
+                    client_manager.remove(id);
                     return;
                 }
             };
@@ -215,8 +213,7 @@ impl Client {
                 }
                 Err(e) => {
                     error!("[{}][Sender] Sending Message: {}", id, e);
-                    let client_count = client_manager.remove_con(id);
-                    info!("Connected Clients: {}", client_count);
+                    client_manager.remove(id);
                     return;
                 }
             };

@@ -89,6 +89,6 @@ impl ClientManager {
 
     /// Returns the number of currently connected clients
     pub fn client_count(&self) -> u64 {
-        self.client_count.load(std::sync::atomic::Ordering::SeqCst);
+        self.client_count.load(std::sync::atomic::Ordering::SeqCst)
     }
 }
