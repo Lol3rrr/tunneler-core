@@ -9,7 +9,7 @@ mod accept_clients;
 
 /// Holds all information needed to creating and running
 /// a single Tunneler-Server
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Server {
     listen_port: u32,
     public_port: u32,
@@ -77,4 +77,16 @@ impl Server {
             client.unwrap().new_con(id, socket);
         }
     }
+}
+
+#[test]
+fn new_server() {
+    assert_eq!(
+        Server {
+            public_port: 80,
+            listen_port: 8080,
+            key: vec![2, 3, 1],
+        },
+        Server::new(80, 8080, vec![2, 3, 1])
+    );
 }

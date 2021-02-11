@@ -5,12 +5,14 @@
 //! in a private network to be exposed through a public server
 
 /// Provides all the Client related functionality
+#[cfg(feature = "client")]
 pub mod client;
 mod connections;
 pub use connections::Destination;
 /// Messages are used for all Communication between Server and Client
 pub mod message;
 /// Provides all the Server related functionality
+#[cfg(feature = "server")]
 pub mod server;
 /// Provides all the Stream/Queue related functionality
 pub mod streams;
