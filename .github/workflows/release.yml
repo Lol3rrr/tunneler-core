@@ -13,6 +13,5 @@ jobs:
         uses: Roang-zero1/github-create-release-action@master
         with:
           version_regex: ^v[[:digit:]]+\.[[:digit:]]+\.[[:digit:]]+
-          create_draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
