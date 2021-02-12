@@ -1,6 +1,7 @@
 use crate::server::client::ClientManager;
 
-use rand::Rng;
+use rand::rngs::SmallRng;
+use rand::{Rng, SeedableRng};
 use tokio::net::TcpListener;
 
 use log::{error, info};
@@ -34,14 +35,14 @@ impl Server {
     /// Starts the actual server itself along with all the needed tasks
     ///
     /// This is a blocking call and is not expected to return
-    pub async fn start(self) -> std::io::Result<()> {
+    pub async fn start(self) -> ! {
         info!("Starting...");
 
         let listen_bind_addr = format!("0.0.0.0:{}", self.listen_port);
-        let listen_listener = TcpListener::bind(&listen_bind_addr).await?;
+        let listen_listener = TcpListener::bind(&listen_bind_addr).await.unwrap();
 
         let req_bind_addr = format!("0.0.0.0:{}", self.public_port);
-        let req_listener = TcpListener::bind(&req_bind_addr).await?;
+        let req_listener = TcpListener::bind(&req_bind_addr).await.unwrap();
 
         let clients = std::sync::Arc::new(ClientManager::new());
 
@@ -55,7 +56,7 @@ impl Server {
             clients.clone(),
         ));
 
-        let mut rng = rand::thread_rng();
+        let mut rng = SmallRng::from_entropy();
 
         // Accepting User-Requests
         loop {

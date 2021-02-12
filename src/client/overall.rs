@@ -68,7 +68,7 @@ impl Client {
             let (h_data, data) = msg.serialize();
             match server_con.write_total(&h_data, h_data.len()).await {
                 Ok(_) => {
-                    debug!("Sent Header");
+                    debug!("[Sender] Sent Header");
                 }
                 Err(e) => {
                     error!("Sending Header: {}", e);
@@ -77,10 +77,10 @@ impl Client {
             };
             match server_con.write_total(data, data.len()).await {
                 Ok(_) => {
-                    debug!("Sent Data");
+                    debug!("[Sender] Sent Data");
                 }
                 Err(e) => {
-                    error!("Sending Data: {}", e);
+                    error!("[Sender] Sending Data: {}", e);
                     return;
                 }
             };
@@ -97,7 +97,7 @@ impl Client {
         server_con: std::sync::Arc<Connection>,
         send_queue: tokio::sync::mpsc::Sender<Message>,
         client_cons: std::sync::Arc<Connections<mpsc::StreamWriter<Message>>>,
-        handler: &F,
+        start_handler: &F,
         handler_data: &Option<T>,
         obj_pool: objectpool::Pool<Vec<u8>>,
     ) where
@@ -130,7 +130,7 @@ impl Client {
                 }
                 MessageType::Data => {}
                 _ => {
-                    error!("[Receiver][{}] Unexpected Operation: {:?}", id, kind);
+                    error!("[Receiver] Unexpected Operation: {:?}", kind);
                     continue;
                 }
             };
@@ -142,7 +142,7 @@ impl Client {
             let msg = match server_con.read_total(&mut buf, data_length).await {
                 Ok(_) => Message::new_guarded(header, buf),
                 Err(e) => {
-                    error!("[Receiver][{}] Receiving Data: {}", e, id);
+                    error!("[Receiver] Receiving Data: {}", e);
                     client_cons.remove(id);
                     continue;
                 }
@@ -160,7 +160,7 @@ impl Client {
                     let handle_tx =
                         queues::Sender::new(id, send_queue.clone(), client_cons.clone());
 
-                    handler(id, handle_rx, handle_tx, handler_data.clone()).await;
+                    start_handler(id, handle_rx, handle_tx, handler_data.clone()).await;
                     tx
                 }
             };
@@ -168,7 +168,8 @@ impl Client {
             match con_queue.send(msg).await {
                 Ok(_) => {}
                 Err(e) => {
-                    error!("[Receiver][{}] Adding to Queue: {}", id, e);
+                    error!("[Receiver] Adding to Queue for {}: {}", id, e);
+                    continue;
                 }
             };
         }
@@ -187,7 +188,7 @@ impl Client {
     /// * A Reader where all the Messages for this user can be read from
     /// * A Writer which can be used to send data back to the user
     /// * The handler_data that can be used to share certain information when needed
-    pub async fn start<F, Fut, T>(self, handler: F, handler_data: Option<T>) -> !
+    pub async fn start<F, Fut, T>(self, start_handler: F, start_handler_data: Option<T>) -> !
     where
         F: Fn(u32, mpsc::StreamReader<Message>, queues::Sender, Option<T>) -> Fut,
         Fut: Future<Output = ()>,
@@ -233,7 +234,7 @@ impl Client {
 
             attempts = 0;
 
-            let (queue_tx, queue_rx) = tokio::sync::mpsc::channel(30);
+            let (queue_tx, queue_rx) = tokio::sync::mpsc::channel(50);
             let outgoing = std::sync::Arc::new(Connections::<mpsc::StreamWriter<Message>>::new());
 
             tokio::task::spawn(Self::sender(connection_arc.clone(), queue_rx));
@@ -248,8 +249,8 @@ impl Client {
                 connection_arc,
                 queue_tx.clone(),
                 outgoing,
-                &handler,
-                &handler_data,
+                &start_handler,
+                &start_handler_data,
                 obj_pool,
             )
             .await;

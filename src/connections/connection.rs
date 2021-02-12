@@ -57,7 +57,7 @@ impl Connection {
         Ok(())
     }
 
-    pub async fn read_total(&self, data: &mut [u8], length: usize) -> std::io::Result<()> {
+    pub async fn read_total(&self, data: &mut [u8], length: usize) -> std::io::Result<usize> {
         let mut offset = 0;
         let mut left_to_read = length;
 
@@ -82,6 +82,6 @@ impl Connection {
             };
         }
 
-        Ok(())
+        Ok(offset)
     }
 }
