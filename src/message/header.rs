@@ -39,7 +39,6 @@ impl MessageHeader {
         let mut output = [0; 13];
 
         let id = self.id.to_le_bytes();
-        let kind = self.kind.serialize();
         let length = self.length.to_le_bytes();
 
         output[0] = id[0];
@@ -47,7 +46,7 @@ impl MessageHeader {
         output[2] = id[2];
         output[3] = id[3];
 
-        output[4] = kind;
+        output[4] = self.kind.serialize();
 
         output[5] = length[0];
         output[6] = length[1];
@@ -77,15 +76,15 @@ impl MessageHeader {
 
 #[test]
 fn message_header_serialize_connect() {
-    let input = vec![13, 0, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0];
+    let input = vec![13, 0, 0, 0, 1, 20, 0, 0, 0, 0, 0, 0, 0];
     assert_eq!(
+        &input[0..13],
         &MessageHeader {
             id: 13,
             kind: MessageType::Connect,
             length: 20,
         }
         .serialize(),
-        &input[0..13]
     );
 }
 
@@ -93,7 +92,7 @@ fn message_header_serialize_connect() {
 fn message_header_deserialize_connect() {
     let mut input = [0; 13];
     input[0] = 13;
-    input[4] = 0;
+    input[4] = 1;
     input[5] = 20;
     assert_eq!(
         Some(MessageHeader {

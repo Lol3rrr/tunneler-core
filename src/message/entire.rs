@@ -70,6 +70,7 @@ fn message_serialize_connect() {
 
     let mut expected_header = [0; 13];
     expected_header[0] = 13;
+    expected_header[4] = 1;
     expected_header[5] = 2;
     assert_eq!(expected_header, h_output);
 
@@ -94,7 +95,7 @@ fn message_serialize_data() {
 
     let mut header_expect = [0; 13];
     header_expect[0] = 13;
-    header_expect[4] = 2;
+    header_expect[4] = 3;
     header_expect[5] = 12;
     assert_eq!(header_expect, h_output);
 
