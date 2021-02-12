@@ -1,6 +1,7 @@
 use crate::client::queues;
 use crate::connections::{Connection, Connections, Destination};
 use crate::message::{Message, MessageHeader, MessageType};
+use crate::objectpool;
 use crate::streams::mpsc;
 
 use rand::RngCore;
@@ -98,6 +99,7 @@ impl Client {
         client_cons: std::sync::Arc<Connections<mpsc::StreamWriter<Message>>>,
         handler: &F,
         handler_data: &Option<T>,
+        obj_pool: objectpool::Pool<Vec<u8>>,
     ) where
         F: Fn(u32, mpsc::StreamReader<Message>, queues::Sender, Option<T>) -> Fut,
         Fut: Future<Output = ()>,
@@ -134,9 +136,11 @@ impl Client {
             };
 
             let data_length = header.get_length() as usize;
-            let mut buf = vec![0; data_length];
+            let mut buf = obj_pool.get();
+            buf.resize(data_length, 0);
+
             let msg = match server_con.read_total(&mut buf, data_length).await {
-                Ok(_) => Message::new(header, buf),
+                Ok(_) => Message::new_guarded(header, buf),
                 Err(e) => {
                     error!("[Receiver][{}] Receiving Data: {}", e, id);
                     client_cons.remove(id);
@@ -239,12 +243,14 @@ impl Client {
                 std::time::Duration::from_secs(15),
             ));
 
+            let obj_pool = objectpool::Pool::new(100);
             Client::receiver(
                 connection_arc,
                 queue_tx.clone(),
                 outgoing,
                 &handler,
                 &handler_data,
+                obj_pool,
             )
             .await;
         }
