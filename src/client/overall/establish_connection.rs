@@ -31,20 +31,18 @@ pub async fn establish_connection(adr: &str, key: &[u8]) -> Option<std::sync::Ar
         return None;
     }
 
-    let mut key_buf = [0; 4092];
-    let mut recv_pub_key = match connection_arc.read_raw(&mut key_buf).await {
-        Ok(0) => {
-            return None;
-        }
-        Ok(n) => key_buf[0..n].to_vec(),
+    let key_length = header.get_length() as usize;
+    let mut key_buf = vec![0; key_length];
+    match connection_arc.read_total(&mut key_buf, key_length).await {
+        Ok(_) => {}
         Err(e) => {
             error!("Reading Public-Key from Server: {}", e);
             return None;
         }
     };
 
-    let e_bytes = recv_pub_key.split_off(256);
-    let n_bytes = recv_pub_key;
+    let e_bytes = key_buf.split_off(256);
+    let n_bytes = key_buf;
 
     let pub_key = RSAPublicKey::new(
         BigUint::from_bytes_le(&n_bytes),
