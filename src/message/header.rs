@@ -103,3 +103,13 @@ fn message_header_deserialize_connect() {
         MessageHeader::deserialize(input)
     );
 }
+
+#[test]
+fn serialize_deserialize() {
+    let first = MessageHeader::new(123, MessageType::Data, 123);
+    let serialized = first.serialize();
+    let deserialized = MessageHeader::deserialize(serialized);
+
+    assert_eq!(true, deserialized.is_some());
+    assert_eq!(first, deserialized.unwrap());
+}
