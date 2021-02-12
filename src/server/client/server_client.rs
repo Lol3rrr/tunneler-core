@@ -194,8 +194,9 @@ impl Client {
         obj_pool: std::sync::Arc<objectpool::Pool<Vec<u8>>>,
     ) {
         loop {
-            if let Err(_) =
-                Self::receive(id, &mut read_con, &user_cons, &client_manager, &obj_pool).await
+            if Self::receive(id, &mut read_con, &user_cons, &client_manager, &obj_pool)
+                .await
+                .is_err()
             {
                 return;
             }
