@@ -4,7 +4,7 @@ use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use tokio::net::TcpListener;
 
-use log::{error, info};
+use log::{debug, error, info};
 
 mod accept_clients;
 
