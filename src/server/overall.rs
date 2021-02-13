@@ -75,6 +75,7 @@ impl Server {
                 continue;
             }
 
+            debug!("Accepted new Request");
             client.unwrap().new_con(id, socket);
         }
     }

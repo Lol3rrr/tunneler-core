@@ -30,6 +30,7 @@ pub async fn recv<F>(
         // a false positive.
         match con.read(&mut buf).await {
             Ok(0) => {
+                error!("[{}][{}]EOF from User-Con", client_id, user_id);
                 break;
             }
             Ok(n) => {
@@ -59,9 +60,5 @@ pub async fn recv<F>(
         }
     }
 
-    // TODO find a way to reproduce this behaviour without having to use this
-    // exact function as this would make it not easy or ergonomic to make any
-    // sort of deeper changes
-    //Client::close_user_connection(user_id, client_id, user_cons, send_queue).await;
     close_user.await;
 }

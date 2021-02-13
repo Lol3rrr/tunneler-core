@@ -29,24 +29,27 @@ impl Client {
         }
     }
 
-    async fn heartbeat(
+    async fn heartbeat(send_queue: &tokio::sync::mpsc::Sender<Message>) {
+        let msg_header = MessageHeader::new(0, MessageType::Heartbeat, 0);
+        let msg = Message::new(msg_header, Vec::new());
+
+        match send_queue.send(msg).await {
+            Ok(_) => {
+                debug!("[Heartbeat] Sent");
+            }
+            Err(e) => {
+                error!("[Heartbeat] Sending: {}", e);
+                return;
+            }
+        };
+    }
+
+    async fn heartbeat_loop(
         send_queue: tokio::sync::mpsc::Sender<Message>,
         wait_time: std::time::Duration,
     ) {
         loop {
-            let msg_header = MessageHeader::new(0, MessageType::Heartbeat, 0);
-            let msg = Message::new(msg_header, Vec::new());
-
-            match send_queue.send(msg).await {
-                Ok(_) => {
-                    debug!("[Heartbeat] Sent");
-                }
-                Err(e) => {
-                    error!("[Heartbeat] Sending: {}", e);
-                    return;
-                }
-            };
-
+            Self::heartbeat(&send_queue).await;
             tokio::time::sleep(wait_time).await;
         }
     }
@@ -239,7 +242,7 @@ impl Client {
 
             tokio::task::spawn(Self::sender(connection_arc.clone(), queue_rx));
 
-            tokio::task::spawn(Self::heartbeat(
+            tokio::task::spawn(Self::heartbeat_loop(
                 queue_tx.clone(),
                 std::time::Duration::from_secs(15),
             ));
@@ -256,4 +259,19 @@ impl Client {
             .await;
         }
     }
+}
+
+#[tokio::test]
+async fn heartbeat() {
+    let (tx, mut rx) = tokio::sync::mpsc::channel(10);
+
+    Client::heartbeat(&tx).await;
+
+    assert_eq!(
+        Some(Message::new(
+            MessageHeader::new(0, MessageType::Heartbeat, 0),
+            vec![]
+        )),
+        rx.recv().await
+    );
 }
