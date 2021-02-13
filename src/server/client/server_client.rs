@@ -107,7 +107,7 @@ impl Client {
     ) -> Result<(), ()> {
         let mut head_buf = [0; 13];
         let header = match read_con.read_exact(&mut head_buf).await {
-            Ok(_) => {
+            Ok(n) => {
                 let h = MessageHeader::deserialize(head_buf);
                 if h.is_none() {
                     error!("[{}] Deserializing Header: {:?}", id, head_buf);

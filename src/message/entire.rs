@@ -36,7 +36,10 @@ impl Message {
             Data::Pooled(ref p) => p,
         };
 
-        (self.header.serialize(), data)
+        (
+            self.header.serialize(),
+            &data[0..self.header.length as usize],
+        )
     }
 
     /// The Header of this message
@@ -82,6 +85,31 @@ fn message_serialize_connect() {
 #[test]
 fn message_serialize_data() {
     let mut inner_data = vec![0; 12];
+    inner_data[2] = 33;
+    let msg = Message::new(
+        MessageHeader {
+            id: 13,
+            kind: MessageType::Data,
+            length: 12,
+        },
+        inner_data,
+    );
+    let (h_output, d_output) = msg.serialize();
+
+    let mut header_expect = [0; 13];
+    header_expect[0] = 13;
+    header_expect[4] = 3;
+    header_expect[5] = 12;
+    assert_eq!(header_expect, h_output);
+
+    let mut data_expect = vec![0; 12];
+    data_expect[2] = 33;
+    assert_eq!(&data_expect, d_output);
+}
+
+#[test]
+fn message_serialize_length_less_than_vec_size() {
+    let mut inner_data = vec![0; 20];
     inner_data[2] = 33;
     let msg = Message::new(
         MessageHeader {
