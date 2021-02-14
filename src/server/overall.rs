@@ -4,7 +4,7 @@ use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use tokio::net::TcpListener;
 
-use log::{debug, error, info};
+use log::{error, info};
 
 mod accept_clients;
 
@@ -75,7 +75,6 @@ impl Server {
                 continue;
             }
 
-            debug!("Accepted new Request");
             client.unwrap().new_con(id, socket);
         }
     }

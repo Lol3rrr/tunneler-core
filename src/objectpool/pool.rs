@@ -1,6 +1,7 @@
 use crate::objectpool::Guard;
 
 use crossbeam_queue::ArrayQueue;
+use log::error;
 
 /// A Generic Pool that recovers the Data it hands out
 /// for later use again
@@ -21,7 +22,13 @@ where
         for _ in 0..size {
             // This should not fail as we only fill this up to the max
             // size so it will never exceed its given capacity
-            objs.push(T::default());
+            match objs.push(T::default()) {
+                Ok(_) => {}
+                Err(_) => {
+                    error!("Attempted to fill queue beyond its capacity");
+                    break;
+                }
+            };
         }
 
         Self { objs }

@@ -16,7 +16,7 @@ pub struct Client {
     id: u32,
     user_cons: Connections<mpsc::StreamWriter<Message>>,
     client_manager: std::sync::Arc<ClientManager>,
-    client_send_queue: tokio::sync::mpsc::Sender<Message>,
+    client_send_queue: tokio::sync::mpsc::UnboundedSender<Message>,
 }
 
 impl Client {
@@ -24,7 +24,7 @@ impl Client {
     pub fn new(
         id: u32,
         client_manager: std::sync::Arc<ClientManager>,
-        send_queue: tokio::sync::mpsc::Sender<Message>,
+        send_queue: tokio::sync::mpsc::UnboundedSender<Message>,
     ) -> Client {
         Client {
             id,
@@ -48,13 +48,13 @@ impl Client {
         user_id: u32,
         client_id: u32,
         user_cons: Connections<mpsc::StreamWriter<Message>>,
-        send_queue: tokio::sync::mpsc::Sender<Message>,
+        send_queue: tokio::sync::mpsc::UnboundedSender<Message>,
     ) {
         user_cons.remove(user_id);
 
         let header = MessageHeader::new(user_id, MessageType::Close, 0);
         let msg = Message::new(header, vec![0; 0]);
-        match send_queue.send(msg).await {
+        match send_queue.send(msg) {
             Ok(_) => {}
             Err(e) => {
                 error!("[{}][{}] Sending Close Message: {}", client_id, user_id, e);
@@ -81,9 +81,7 @@ impl Client {
             user_id,
             read_con,
             self.client_send_queue.clone(),
-            async move {
-                Client::close_user_connection(user_id, client_id, cloned_cons, send_queue).await;
-            },
+            Client::close_user_connection(user_id, client_id, cloned_cons, send_queue),
         ));
     }
 
@@ -129,7 +127,6 @@ impl Client {
                 return Ok(());
             }
             MessageType::Heartbeat => {
-                debug!("[{}] Received Heartbeat", id);
                 return Ok(());
             }
             _ => {
@@ -147,7 +144,7 @@ impl Client {
         let user_id = header.get_id();
 
         // Forwarding the message to the actual user
-        let stream = match user_cons.get(user_id) {
+        let stream = match user_cons.get_clone(user_id) {
             Some(s) => s,
             None => {
                 // Removes this message and drain all the Data belonging to this message
@@ -160,7 +157,6 @@ impl Client {
         let body_length = header.get_length() as usize;
         let mut body_buf = obj_pool.get();
         body_buf.resize(body_length, 0);
-
         match read_con.read_exact(&mut body_buf).await {
             Ok(_) => {}
             Err(e) => {
@@ -168,7 +164,7 @@ impl Client {
             }
         };
 
-        match stream.send(Message::new_guarded(header, body_buf)).await {
+        match stream.send(Message::new_guarded(header, body_buf)) {
             Ok(_) => {}
             Err(e) => {
                 error!("[{}][{}] Adding to User-Queue: {}", id, user_id, e);
@@ -214,7 +210,7 @@ impl Client {
     pub async fn sender(
         id: u32,
         mut write_con: tokio::net::tcp::OwnedWriteHalf,
-        mut queue: tokio::sync::mpsc::Receiver<Message>,
+        mut queue: tokio::sync::mpsc::UnboundedReceiver<Message>,
         client_manager: std::sync::Arc<ClientManager>,
     ) {
         loop {
@@ -252,7 +248,7 @@ impl Client {
 #[test]
 fn new_client() {
     let manager_arc = std::sync::Arc::new(ClientManager::new());
-    let (tx, _rx) = tokio::sync::mpsc::channel(10);
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
 
     let client = Client::new(123, manager_arc, tx);
 

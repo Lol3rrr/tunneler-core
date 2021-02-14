@@ -23,6 +23,8 @@ impl ClientManager {
         }
     }
 
+    /// Returns a random Client from all currently connected
+    /// Clients
     pub fn get(&self) -> Option<Client> {
         if self.client_count() == 0 {
             return None;
@@ -106,7 +108,7 @@ fn add_client() {
     let manager = std::sync::Arc::new(ClientManager::new());
     assert_eq!(0, manager.client_count());
 
-    let (tx, _rx) = tokio::sync::mpsc::channel(10);
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
     manager.add(Client::new(123, manager.clone(), tx));
     assert_eq!(1, manager.client_count());
 }
@@ -116,7 +118,7 @@ fn add_remove_client() {
     let manager = std::sync::Arc::new(ClientManager::new());
     assert_eq!(0, manager.client_count());
 
-    let (tx, _rx) = tokio::sync::mpsc::channel(10);
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
     manager.add(Client::new(123, manager.clone(), tx));
     assert_eq!(1, manager.client_count());
 
@@ -129,7 +131,7 @@ fn get_client() {
     let manager = std::sync::Arc::new(ClientManager::new());
     assert_eq!(0, manager.client_count());
 
-    let (tx, _rx) = tokio::sync::mpsc::channel(10);
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
     manager.add(Client::new(123, manager.clone(), tx.clone()));
     assert_eq!(1, manager.client_count());
 

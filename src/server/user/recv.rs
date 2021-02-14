@@ -3,6 +3,8 @@ use crate::message::{Message, MessageHeader, MessageType};
 use log::error;
 use tokio::io::AsyncReadExt;
 
+const BUFFER_SIZE: usize = 4096;
+
 /// Reads from a new User-Connection and sends it to the client
 ///
 /// Params:
@@ -15,14 +17,14 @@ pub async fn recv<F>(
     client_id: u32,
     user_id: u32,
     mut con: tokio::net::tcp::OwnedReadHalf,
-    send_queue: tokio::sync::mpsc::Sender<Message>,
+    send_queue: tokio::sync::mpsc::UnboundedSender<Message>,
     close_user: F,
 ) where
     F: std::future::Future<Output = ()>,
 {
     // Reads and forwards all the data from the socket to the client
     loop {
-        let mut buf = vec![0; 2048];
+        let mut buf = vec![0; BUFFER_SIZE];
 
         // Try to read data from the user
         //
@@ -30,7 +32,6 @@ pub async fn recv<F>(
         // a false positive.
         match con.read(&mut buf).await {
             Ok(0) => {
-                error!("[{}][{}]EOF from User-Con", client_id, user_id);
                 break;
             }
             Ok(n) => {
@@ -39,7 +40,7 @@ pub async fn recv<F>(
                 let msg = Message::new(header, buf);
 
                 // Puts the message in the queue to be send to the client
-                match send_queue.send(msg).await {
+                match send_queue.send(msg) {
                     Ok(_) => {}
                     Err(e) => {
                         error!(
@@ -60,5 +61,6 @@ pub async fn recv<F>(
         }
     }
 
+    // This then actually closes the Connection
     close_user.await;
 }

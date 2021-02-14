@@ -36,7 +36,7 @@ pub async fn accept_clients(
 
         let (rx, tx) = client_socket.into_split();
 
-        let (queue_tx, queue_rx) = tokio::sync::mpsc::channel(100);
+        let (queue_tx, queue_rx) = tokio::sync::mpsc::unbounded_channel();
 
         let client = Client::new(c_id, clients.clone(), queue_tx);
 

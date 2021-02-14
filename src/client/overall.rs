@@ -151,7 +151,7 @@ impl Client {
                 }
             };
 
-            let con_queue = match client_cons.get(id) {
+            let con_queue = match client_cons.get_clone(id) {
                 Some(q) => q.clone(),
                 // In case there is no matching user-connection, create a new one
                 None => {
@@ -168,7 +168,7 @@ impl Client {
                 }
             };
 
-            match con_queue.send(msg).await {
+            match con_queue.send(msg) {
                 Ok(_) => {}
                 Err(e) => {
                     error!("[Receiver] Adding to Queue for {}: {}", id, e);

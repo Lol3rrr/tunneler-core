@@ -1,17 +1,26 @@
 use dashmap::DashMap;
 
 #[derive(Debug)]
-pub struct Connections<T> {
+pub struct Connections<T>
+where
+    T: Clone,
+{
     connections: std::sync::Arc<DashMap<u32, T, fnv::FnvBuildHasher>>,
 }
 
-impl<T> Default for Connections<T> {
+impl<T> Default for Connections<T>
+where
+    T: Clone,
+{
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T> Connections<T> {
+impl<T> Connections<T>
+where
+    T: Clone,
+{
     pub fn new() -> Connections<T> {
         Connections {
             connections: std::sync::Arc::new(DashMap::with_hasher(fnv::FnvBuildHasher::default())),
@@ -19,16 +28,11 @@ impl<T> Connections<T> {
     }
 
     #[inline(always)]
-    pub fn get(&self, id: u32) -> Option<dashmap::mapref::one::Ref<u32, T, fnv::FnvBuildHasher>> {
-        self.connections.get(&id)
-    }
-
-    #[inline(always)]
-    pub fn get_mut(
-        &self,
-        id: u32,
-    ) -> Option<dashmap::mapref::one::RefMut<u32, T, fnv::FnvBuildHasher>> {
-        self.connections.get_mut(&id)
+    pub fn get_clone(&self, id: u32) -> Option<T> {
+        match self.connections.get(&id) {
+            None => None,
+            Some(c) => Some(c.clone()),
+        }
     }
 
     #[inline(always)]
@@ -42,7 +46,10 @@ impl<T> Connections<T> {
     }
 }
 
-impl<T> Clone for Connections<T> {
+impl<T> Clone for Connections<T>
+where
+    T: Clone,
+{
     fn clone(&self) -> Self {
         Self {
             connections: self.connections.clone(),

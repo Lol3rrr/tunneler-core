@@ -1,4 +1,5 @@
 use crossbeam_queue::ArrayQueue;
+use log::error;
 
 /// A thin wrapper around the Data it is generic over
 /// and returns the Data it owns over the given channel
@@ -29,7 +30,13 @@ where
     fn drop(&mut self) {
         let inner_data = std::mem::take(&mut self.data);
         if !self.queue.is_full() {
-            self.queue.push(inner_data);
+            match self.queue.push(inner_data) {
+                Ok(_) => {}
+                Err(e) => {
+                    error!("Returning Message to full Queue");
+                    drop(e);
+                }
+            };
         }
     }
 }
