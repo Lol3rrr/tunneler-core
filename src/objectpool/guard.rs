@@ -1,4 +1,4 @@
-use log::error;
+use crossbeam_queue::ArrayQueue;
 
 /// A thin wrapper around the Data it is generic over
 /// and returns the Data it owns over the given channel
@@ -9,7 +9,7 @@ where
     T: Default,
 {
     data: T,
-    ret_tx: tokio::sync::mpsc::UnboundedSender<T>,
+    queue: std::sync::Arc<ArrayQueue<T>>,
 }
 
 impl<T> Guard<T>
@@ -17,11 +17,8 @@ where
     T: Default,
 {
     /// Returns a new Guard that will return the Data on the given Sender
-    pub fn new(data: T, return_tx: tokio::sync::mpsc::UnboundedSender<T>) -> Self {
-        Self {
-            data,
-            ret_tx: return_tx,
-        }
+    pub fn new(data: T, queue: std::sync::Arc<ArrayQueue<T>>) -> Self {
+        Self { data, queue }
     }
 }
 
@@ -31,9 +28,9 @@ where
 {
     fn drop(&mut self) {
         let inner_data = std::mem::take(&mut self.data);
-        if let Err(e) = self.ret_tx.send(inner_data) {
-            error!("Returning Data: {}", e);
-        };
+        if !self.queue.is_full() {
+            self.queue.push(inner_data);
+        }
     }
 }
 
@@ -68,33 +65,36 @@ where
 
 #[test]
 fn return_on_drop() {
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-    let guard = Guard::new(5, tx);
+    let queue = std::sync::Arc::new(ArrayQueue::new(1));
+    let guard = Guard::new(5, queue.clone());
     drop(guard);
 
-    assert_eq!(Some(5), rx.blocking_recv());
+    assert_eq!(1, queue.len());
+    assert_eq!(Some(5), queue.pop());
 }
 
 #[test]
 fn deref_value_drop() {
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-    let guard = Guard::new(5, tx);
+    let queue = std::sync::Arc::new(ArrayQueue::new(1));
+    let guard = Guard::new(5, queue.clone());
     assert_eq!(5, *guard);
 
     drop(guard);
 
-    assert_eq!(Some(5), rx.blocking_recv());
+    assert_eq!(1, queue.len());
+    assert_eq!(Some(5), queue.pop());
 }
 
 #[test]
 fn mut_deref_value_drop() {
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-    let mut guard = Guard::new(5, tx);
+    let queue = std::sync::Arc::new(ArrayQueue::new(1));
+    let mut guard = Guard::new(5, queue.clone());
     assert_eq!(5, *guard);
     *guard = 3;
     assert_eq!(3, *guard);
 
     drop(guard);
 
-    assert_eq!(Some(3), rx.blocking_recv());
+    assert_eq!(1, queue.len());
+    assert_eq!(Some(3), queue.pop());
 }

@@ -22,6 +22,7 @@ rsa = { version = "0.3.0" }
 base64 = { version = "0.13.0" }
 tokio = { version = "1.1.1", features = ["rt", "rt-multi-thread", "net", "io-util", "sync", "time", "macros"] }
 fnv = { version = "1.0.7" }
+crossbeam-queue = "0.3"
 
 [dev-dependencies]
 criterion = "0.3"

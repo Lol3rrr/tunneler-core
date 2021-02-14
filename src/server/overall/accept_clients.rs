@@ -40,7 +40,7 @@ pub async fn accept_clients(
 
         let client = Client::new(c_id, clients.clone(), queue_tx);
 
-        let obj_pool = Pool::new_arc(CLIENT_OBJPOOL_SIZE);
+        let obj_pool = Pool::new(CLIENT_OBJPOOL_SIZE);
         tokio::task::spawn(Client::sender(c_id, tx, queue_rx, clients.clone()));
         tokio::task::spawn(Client::receiver(
             c_id,
@@ -49,7 +49,6 @@ pub async fn accept_clients(
             clients.clone(),
             obj_pool.clone(),
         ));
-        tokio::task::spawn(Pool::recover_loop(obj_pool));
 
         clients.add(client);
     }

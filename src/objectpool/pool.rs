@@ -1,14 +1,14 @@
 use crate::objectpool::Guard;
 
+use crossbeam_queue::ArrayQueue;
+
 /// A Generic Pool that recovers the Data it hands out
 /// for later use again
 pub struct Pool<T>
 where
     T: Default,
 {
-    objs: std::sync::Mutex<Vec<T>>,
-    tx: tokio::sync::mpsc::UnboundedSender<T>,
-    rx: tokio::sync::Mutex<tokio::sync::mpsc::UnboundedReceiver<T>>,
+    objs: std::sync::Arc<ArrayQueue<T>>,
 }
 
 impl<T> Pool<T>
@@ -17,37 +17,20 @@ where
 {
     /// Creates a new Pool with size amount of Elements
     pub fn new(size: usize) -> Self {
-        let mut objs = Vec::with_capacity(size);
+        let objs = std::sync::Arc::new(ArrayQueue::new(size));
         for _ in 0..size {
+            // This should not fail as we only fill this up to the max
+            // size so it will never exceed its given capacity
             objs.push(T::default());
         }
 
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-
-        Self {
-            objs: std::sync::Mutex::new(objs),
-            tx,
-            rx: tokio::sync::Mutex::new(rx),
-        }
-    }
-
-    /// Creates a new Pool just like `new` but directly wraps it
-    /// in an Arc to allow for easy sharing
-    pub fn new_arc(size: usize) -> std::sync::Arc<Self> {
-        std::sync::Arc::new(Self::new(size))
-    }
-
-    /// Returns the currently available Objects in the pool
-    pub fn available_objs(&self) -> usize {
-        let tmp = self.objs.lock().unwrap();
-        tmp.len()
+        Self { objs }
     }
 
     /// Tries to return an entry
     pub fn try_get(&self) -> Option<Guard<T>> {
-        let mut tmp_objs = self.objs.lock().unwrap();
-        match tmp_objs.pop() {
-            Some(s) => Some(Guard::new(s, self.tx.clone())),
+        match self.objs.pop() {
+            Some(s) => Some(Guard::new(s, self.objs.clone())),
             None => None,
         }
     }
@@ -58,47 +41,26 @@ where
             Some(s) => s,
             None => {
                 let n_obj = T::default();
-                Guard::new(n_obj, self.tx.clone())
+                Guard::new(n_obj, self.objs.clone())
             }
         }
     }
+}
 
-    /// Actually attempts to recover a single new piece of Data
-    /// received on the Channel
-    async fn recover(&self) {
-        let mut rx = self.rx.lock().await;
-
-        let tmp = match rx.recv().await {
-            Some(s) => s,
-            None => {
-                return;
-            }
-        };
-        drop(rx);
-
-        let mut underlying_data = self.objs.lock().unwrap();
-        underlying_data.push(tmp);
-    }
-
-    /// This should run in its own seperate loop as it will block the
-    /// current task forever
-    pub async fn recover_loop(pool: std::sync::Arc<Self>) {
-        loop {
-            pool.recover().await;
+impl<T> Clone for Pool<T>
+where
+    T: Default,
+{
+    fn clone(&self) -> Self {
+        Self {
+            objs: self.objs.clone(),
         }
     }
 }
 
 #[test]
-fn new_available() {
-    let pool: Pool<u32> = Pool::new(5);
-    assert_eq!(5, pool.available_objs());
-}
-
-#[test]
-fn try_get_not_empty_without_recover() {
-    let pool: Pool<u32> = Pool::new(5);
-    assert_eq!(5, pool.available_objs());
+fn try_get_not_empty() {
+    let pool: Pool<u32> = Pool::<u32>::new(5);
 
     let returned = pool.try_get();
     assert_eq!(true, returned.is_some());
@@ -106,76 +68,25 @@ fn try_get_not_empty_without_recover() {
     assert_eq!(0, *value);
 
     drop(value);
-
-    assert_eq!(4, pool.available_objs());
 }
 #[test]
-fn try_get_empty_without_recover() {
-    let pool: Pool<u32> = Pool::new(0);
-    assert_eq!(0, pool.available_objs());
+fn try_get_empty() {
+    let pool: Pool<u32> = Pool::<u32>::new(1);
+
+    let first = pool.try_get().unwrap();
 
     let returned = pool.try_get();
     assert_eq!(false, returned.is_some());
 
-    assert_eq!(0, pool.available_objs());
-}
-#[tokio::test]
-async fn try_get_not_empty_with_recover() {
-    let pool: Pool<u32> = Pool::new(5);
-    assert_eq!(5, pool.available_objs());
-
-    let returned = pool.try_get();
-    assert_eq!(true, returned.is_some());
-    let value = returned.unwrap();
-    assert_eq!(0, *value);
-
-    assert_eq!(4, pool.available_objs());
-    drop(value);
-
-    pool.recover().await;
-
-    assert_eq!(5, pool.available_objs());
+    drop(first);
 }
 
 #[test]
-fn get_empty_without_recover() {
-    let pool: Pool<u32> = Pool::new(0);
-    assert_eq!(0, pool.available_objs());
+fn get_empty() {
+    let pool: Pool<u32> = Pool::<u32>::new(1);
 
     let value = pool.get();
     assert_eq!(0, *value);
 
     drop(value);
-
-    assert_eq!(0, pool.available_objs());
-}
-#[tokio::test]
-async fn get_empty_with_recover() {
-    let pool: Pool<u32> = Pool::new(0);
-    assert_eq!(0, pool.available_objs());
-
-    let value = pool.get();
-    assert_eq!(0, *value);
-
-    drop(value);
-    assert_eq!(0, pool.available_objs());
-
-    pool.recover().await;
-
-    assert_eq!(1, pool.available_objs());
-}
-#[tokio::test]
-async fn get_with_recover() {
-    let pool: Pool<u32> = Pool::new(1);
-    assert_eq!(1, pool.available_objs());
-
-    let value = pool.get();
-    assert_eq!(0, *value);
-
-    drop(value);
-    assert_eq!(0, pool.available_objs());
-
-    pool.recover().await;
-
-    assert_eq!(1, pool.available_objs());
 }

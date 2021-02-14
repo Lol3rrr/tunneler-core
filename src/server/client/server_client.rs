@@ -191,7 +191,7 @@ impl Client {
         mut read_con: tokio::net::tcp::OwnedReadHalf,
         user_cons: Connections<mpsc::StreamWriter<Message>>,
         client_manager: std::sync::Arc<ClientManager>,
-        obj_pool: std::sync::Arc<objectpool::Pool<Vec<u8>>>,
+        obj_pool: objectpool::Pool<Vec<u8>>,
     ) {
         loop {
             if Self::receive(id, &mut read_con, &user_cons, &client_manager, &obj_pool)
