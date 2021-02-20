@@ -1,7 +1,5 @@
 use crate::server::client::ClientManager;
 
-use rand::rngs::SmallRng;
-use rand::{Rng, SeedableRng};
 use tokio::net::TcpListener;
 
 use log::{error, info};
@@ -56,7 +54,7 @@ impl Server {
             clients.clone(),
         ));
 
-        let mut rng = SmallRng::from_entropy();
+        let mut id: u32 = 0;
 
         // Accepting User-Requests
         loop {
@@ -68,12 +66,13 @@ impl Server {
                 }
             };
 
-            let id = rng.gen();
             let client = clients.get();
             if client.is_none() {
                 error!("Could not obtain a Client-Connection");
                 continue;
             }
+
+            id = id.wrapping_add(1);
 
             client.unwrap().new_con(id, socket);
         }

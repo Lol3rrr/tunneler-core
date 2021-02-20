@@ -59,6 +59,7 @@ impl Client {
         server_con: std::sync::Arc<Connection>,
         mut queue: tokio::sync::mpsc::Receiver<Message>,
     ) {
+        let mut h_data = [0; 13];
         loop {
             let msg = match queue.recv().await {
                 Some(m) => m,
@@ -68,7 +69,7 @@ impl Client {
                 }
             };
 
-            let (h_data, data) = msg.serialize();
+            let data = msg.serialize(&mut h_data);
             match server_con.write_total(&h_data, h_data.len()).await {
                 Ok(_) => {
                     debug!("[Sender] Sent Header");

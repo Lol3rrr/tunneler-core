@@ -35,29 +35,25 @@ impl MessageHeader {
     }
 
     /// Serializes the Header itself into a 13-Byte array
-    pub fn serialize(&self) -> [u8; 13] {
-        let mut output = [0; 13];
-
+    pub fn serialize(&self, target: &mut [u8; 13]) {
         let id = self.id.to_le_bytes();
         let length = self.length.to_le_bytes();
 
-        output[0] = id[0];
-        output[1] = id[1];
-        output[2] = id[2];
-        output[3] = id[3];
+        target[0] = id[0];
+        target[1] = id[1];
+        target[2] = id[2];
+        target[3] = id[3];
 
-        output[4] = self.kind.serialize();
+        target[4] = self.kind.serialize();
 
-        output[5] = length[0];
-        output[6] = length[1];
-        output[7] = length[2];
-        output[8] = length[3];
-        output[9] = length[4];
-        output[10] = length[5];
-        output[11] = length[6];
-        output[12] = length[7];
-
-        output
+        target[5] = length[0];
+        target[6] = length[1];
+        target[7] = length[2];
+        target[8] = length[3];
+        target[9] = length[4];
+        target[10] = length[5];
+        target[11] = length[6];
+        target[12] = length[7];
     }
 
     /// Returns the ID of the Connection this message is meant for
@@ -77,15 +73,15 @@ impl MessageHeader {
 #[test]
 fn message_header_serialize_connect() {
     let input = vec![13, 0, 0, 0, 1, 20, 0, 0, 0, 0, 0, 0, 0];
-    assert_eq!(
-        &input[0..13],
-        &MessageHeader {
-            id: 13,
-            kind: MessageType::Connect,
-            length: 20,
-        }
-        .serialize(),
-    );
+    let mut output = [0; 13];
+    MessageHeader {
+        id: 13,
+        kind: MessageType::Connect,
+        length: 20,
+    }
+    .serialize(&mut output);
+
+    assert_eq!(&input[0..13], &output[0..13],);
 }
 
 #[test]
@@ -107,7 +103,8 @@ fn message_header_deserialize_connect() {
 #[test]
 fn serialize_deserialize() {
     let first = MessageHeader::new(123, MessageType::Data, 123);
-    let serialized = first.serialize();
+    let mut serialized = [0; 13];
+    first.serialize(&mut serialized);
     let deserialized = MessageHeader::deserialize(serialized);
 
     assert_eq!(true, deserialized.is_some());

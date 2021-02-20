@@ -8,12 +8,15 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         b.iter(|| MessageHeader::deserialize(data))
     });
     let header = MessageHeader::new(132, MessageType::Data, 200);
+    let mut serialize_out = [0; 13];
     c.bench_function("Serialize-Message-Header", |b| {
-        b.iter(|| header.serialize())
+        b.iter(|| header.serialize(&mut serialize_out))
     });
 
     let msg = Message::new(header, vec![0; 4092]);
-    c.bench_function("Serialize-Message", |b| b.iter(|| msg.serialize()));
+    c.bench_function("Serialize-Message", |b| {
+        b.iter(|| msg.serialize(&mut serialize_out))
+    });
 }
 
 criterion_group!(benches, criterion_benchmark);

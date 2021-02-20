@@ -30,16 +30,15 @@ impl Message {
 
     /// Serializes the Message into a Vector of Bytes that can
     /// then be send over to the other side (Server or Client)
-    pub fn serialize(&self) -> ([u8; 13], &[u8]) {
+    pub fn serialize(&self, header: &mut [u8; 13]) -> &[u8] {
         let data = match self.data {
             Data::Raw(ref r) => r,
             Data::Pooled(ref p) => p,
         };
 
-        (
-            self.header.serialize(),
-            &data[0..self.header.length as usize],
-        )
+        self.header.serialize(header);
+
+        &data[0..self.header.length as usize]
     }
 
     /// The Header of this message
@@ -69,7 +68,8 @@ fn message_serialize_connect() {
         inner_data,
     );
 
-    let (h_output, d_output) = msg.serialize();
+    let mut h_output = [0; 13];
+    let d_output = msg.serialize(&mut h_output);
 
     let mut expected_header = [0; 13];
     expected_header[0] = 13;
@@ -94,7 +94,8 @@ fn message_serialize_data() {
         },
         inner_data,
     );
-    let (h_output, d_output) = msg.serialize();
+    let mut h_output = [0; 13];
+    let d_output = msg.serialize(&mut h_output);
 
     let mut header_expect = [0; 13];
     header_expect[0] = 13;
@@ -119,7 +120,8 @@ fn message_serialize_length_less_than_vec_size() {
         },
         inner_data,
     );
-    let (h_output, d_output) = msg.serialize();
+    let mut h_output = [0; 13];
+    let d_output = msg.serialize(&mut h_output);
 
     let mut header_expect = [0; 13];
     header_expect[0] = 13;

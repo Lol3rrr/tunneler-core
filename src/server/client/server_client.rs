@@ -213,6 +213,7 @@ impl Client {
         mut queue: tokio::sync::mpsc::UnboundedReceiver<Message>,
         client_manager: std::sync::Arc<ClientManager>,
     ) {
+        let mut h_data = [0; 13];
         loop {
             let msg = match queue.recv().await {
                 Some(m) => m,
@@ -223,7 +224,7 @@ impl Client {
                 }
             };
 
-            let (h_data, data) = msg.serialize();
+            let data = msg.serialize(&mut h_data);
             match write_con.write_all(&h_data).await {
                 Ok(_) => {}
                 Err(e) => {

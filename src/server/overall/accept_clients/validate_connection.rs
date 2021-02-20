@@ -29,7 +29,8 @@ pub async fn validate_connection(con: &mut tokio::net::TcpStream, key: &[u8]) ->
     let msg_header = MessageHeader::new(0, MessageType::Key, data.len() as u64);
     let msg = Message::new(msg_header, data);
 
-    let (h_data, data) = msg.serialize();
+    let mut h_data = [0; 13];
+    let data = msg.serialize(&mut h_data);
     match con.write_all(&h_data).await {
         Ok(_) => {}
         Err(e) => {
@@ -91,7 +92,8 @@ pub async fn validate_connection(con: &mut tokio::net::TcpStream, key: &[u8]) ->
 
     // Step 5b
     let ack_header = MessageHeader::new(0, MessageType::Acknowledge, 0);
-    let ack_data = ack_header.serialize();
+    let mut ack_data = [0; 13];
+    ack_header.serialize(&mut ack_data);
     match con.write_all(&ack_data).await {
         Ok(_) => {}
         Err(e) => {
