@@ -1,11 +1,11 @@
-use crate::connections::Connection;
 use crate::message::Message;
 
 use log::{debug, error, info};
+use tokio::io::AsyncWriteExt;
 
 /// Sends all the messages to the server
 pub async fn sender(
-    server_con: std::sync::Arc<Connection>,
+    mut server_con: tokio::net::tcp::OwnedWriteHalf,
     mut queue: tokio::sync::mpsc::UnboundedReceiver<Message>,
 ) {
     let mut h_data = [0; 13];
@@ -19,7 +19,7 @@ pub async fn sender(
         };
 
         let data = msg.serialize(&mut h_data);
-        match server_con.write_total(&h_data, h_data.len()).await {
+        match server_con.write_all(&h_data).await {
             Ok(_) => {
                 debug!("Sent Header");
             }
@@ -28,7 +28,7 @@ pub async fn sender(
                 return;
             }
         };
-        match server_con.write_total(data, data.len()).await {
+        match server_con.write_all(data).await {
             Ok(_) => {
                 debug!("Sent Data");
             }

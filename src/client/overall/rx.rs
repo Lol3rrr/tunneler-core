@@ -1,10 +1,11 @@
 use crate::client::queues;
-use crate::connections::{Connection, Connections};
+use crate::connections::Connections;
 use crate::message::{Message, MessageHeader, MessageType};
 use crate::objectpool;
 use crate::streams::mpsc;
 
 use std::future::Future;
+use tokio::io::AsyncReadExt;
 
 use log::error;
 
@@ -15,7 +16,7 @@ use log::error;
 /// which will then be placed into the Connection Manager for further
 /// requests
 pub async fn receiver<F, Fut, T>(
-    server_con: std::sync::Arc<Connection>,
+    mut server_con: tokio::net::tcp::OwnedReadHalf,
     send_queue: tokio::sync::mpsc::UnboundedSender<Message>,
     client_cons: std::sync::Arc<Connections<mpsc::StreamWriter<Message>>>,
     start_handler: &F,
@@ -29,7 +30,7 @@ pub async fn receiver<F, Fut, T>(
     let obj_pool: objectpool::Pool<Vec<u8>> = objectpool::Pool::new(50);
 
     loop {
-        let header = match server_con.read_total(&mut head_buf, 13).await {
+        let header = match server_con.read_exact(&mut head_buf).await {
             Ok(_) => match MessageHeader::deserialize(&head_buf) {
                 Some(s) => s,
                 None => {
@@ -61,7 +62,7 @@ pub async fn receiver<F, Fut, T>(
         let mut buf = obj_pool.get();
         buf.resize(data_length, 0);
 
-        let msg = match server_con.read_total(&mut buf, data_length).await {
+        let msg = match server_con.read_exact(&mut buf).await {
             Ok(_) => Message::new_guarded(header, buf),
             Err(e) => {
                 error!("Receiving Data: {}", e);

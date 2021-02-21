@@ -1,22 +1,21 @@
-use crate::connections::Connection;
 use crate::message::{Message, MessageHeader, MessageType};
 
 use log::error;
 use rsa::{BigUint, PaddingScheme, PublicKey, RSAPublicKey};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-pub async fn establish_connection(adr: &str, key: &[u8]) -> Option<std::sync::Arc<Connection>> {
-    let connection = match tokio::net::TcpStream::connect(&adr).await {
+pub async fn establish_connection(adr: &str, key: &[u8]) -> Option<tokio::net::TcpStream> {
+    let mut connection = match tokio::net::TcpStream::connect(&adr).await {
         Ok(c) => c,
         Err(e) => {
             error!("Establishing-Connection: {}", e);
             return None;
         }
     };
-    let connection_arc = std::sync::Arc::new(Connection::new(connection));
 
     // Step 2 - Receive
     let mut head_buf = [0; 13];
-    let header = match connection_arc.read_total(&mut head_buf, 13).await {
+    let header = match connection.read_exact(&mut head_buf).await {
         Ok(_) => {
             let msg = MessageHeader::deserialize(&head_buf);
             msg.as_ref()?;
@@ -33,7 +32,7 @@ pub async fn establish_connection(adr: &str, key: &[u8]) -> Option<std::sync::Ar
 
     let key_length = header.get_length() as usize;
     let mut key_buf = vec![0; key_length];
-    match connection_arc.read_total(&mut key_buf, key_length).await {
+    match connection.read_exact(&mut key_buf).await {
         Ok(_) => {}
         Err(e) => {
             error!("Reading Public-Key from Server: {}", e);
@@ -59,14 +58,14 @@ pub async fn establish_connection(adr: &str, key: &[u8]) -> Option<std::sync::Ar
 
     let mut h_data = [0; 13];
     let data = msg.serialize(&mut h_data);
-    match connection_arc.write_total(&h_data, h_data.len()).await {
+    match connection.write_all(&h_data).await {
         Ok(_) => {}
         Err(e) => {
             error!("Sending Encrypted Key/Password: {}", e);
             return None;
         }
     };
-    match connection_arc.write_total(&data, data.len()).await {
+    match connection.write_all(&data).await {
         Ok(_) => {}
         Err(e) => {
             error!("Sending Encrypted Key/Password: {}", e);
@@ -75,7 +74,7 @@ pub async fn establish_connection(adr: &str, key: &[u8]) -> Option<std::sync::Ar
     };
 
     let mut buf = [0; 13];
-    let header = match connection_arc.read_total(&mut buf, 13).await {
+    let header = match connection.read_exact(&mut buf).await {
         Ok(_) => match MessageHeader::deserialize(&buf) {
             Some(c) => c,
             None => {
@@ -92,5 +91,5 @@ pub async fn establish_connection(adr: &str, key: &[u8]) -> Option<std::sync::Ar
         return None;
     }
 
-    Some(connection_arc)
+    Some(connection)
 }

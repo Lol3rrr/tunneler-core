@@ -85,7 +85,7 @@ impl Client {
                 self.server_destination.get_full_address()
             );
 
-            let connection_arc = match establish_connection::establish_connection(
+            let connection = match establish_connection::establish_connection(
                 &self.server_destination.get_full_address(),
                 &self.key,
             )
@@ -114,10 +114,12 @@ impl Client {
 
             attempts = 0;
 
+            let (read_con, write_con) = connection.into_split();
+
             let (queue_tx, queue_rx) = tokio::sync::mpsc::unbounded_channel();
             let outgoing = std::sync::Arc::new(Connections::<mpsc::StreamWriter<Message>>::new());
 
-            tokio::task::spawn(tx::sender(connection_arc.clone(), queue_rx));
+            tokio::task::spawn(tx::sender(write_con, queue_rx));
 
             tokio::task::spawn(Self::heartbeat_loop(
                 queue_tx.clone(),
@@ -125,7 +127,7 @@ impl Client {
             ));
 
             rx::receiver(
-                connection_arc,
+                read_con,
                 queue_tx.clone(),
                 outgoing,
                 &start_handler,
