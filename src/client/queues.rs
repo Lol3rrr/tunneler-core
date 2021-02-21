@@ -8,7 +8,7 @@ use log::{debug, error};
 /// as well as the correct clean up handling once this is dropped
 pub struct Sender {
     id: u32,
-    tx: tokio::sync::mpsc::Sender<Message>,
+    tx: tokio::sync::mpsc::UnboundedSender<Message>,
     total_client_cons: std::sync::Arc<Connections<mpsc::StreamWriter<Message>>>,
 }
 
@@ -16,7 +16,7 @@ impl Sender {
     /// Creates a new Sender from the given Data
     pub fn new(
         id: u32,
-        tx: tokio::sync::mpsc::Sender<Message>,
+        tx: tokio::sync::mpsc::UnboundedSender<Message>,
         cons: std::sync::Arc<Connections<mpsc::StreamWriter<Message>>>,
     ) -> Self {
         Self {
@@ -32,7 +32,7 @@ impl Sender {
         let header = MessageHeader::new(self.id, MessageType::Data, length);
         let msg = Message::new(header, data);
 
-        self.tx.send(msg).await.is_ok()
+        self.tx.send(msg).is_ok()
     }
 
     /// Closes the Sender and therefore consuming itself
@@ -41,7 +41,7 @@ impl Sender {
         debug!("[Sender][{}] Removed Connection", self.id);
 
         let close_msg = Message::new(MessageHeader::new(self.id, MessageType::Close, 0), vec![]);
-        match self.tx.send(close_msg).await {
+        match self.tx.send(close_msg) {
             Ok(_) => {
                 debug!("[Sender][{}] Sent Close", self.id);
             }
@@ -63,7 +63,7 @@ impl Drop for Sender {
         debug!("[Sender][{}] Removed Connection", self.id);
 
         let close_msg = Message::new(MessageHeader::new(self.id, MessageType::Close, 0), vec![]);
-        match self.tx.try_send(close_msg) {
+        match self.tx.send(close_msg) {
             Ok(_) => {
                 debug!("[Sender][{}] Sent Close", self.id);
             }
@@ -77,7 +77,7 @@ impl Drop for Sender {
 #[tokio::test]
 async fn sender_send() {
     let clients = std::sync::Arc::new(Connections::<mpsc::StreamWriter<Message>>::new());
-    let (tx, mut rx) = tokio::sync::mpsc::channel(5);
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
     let sender = Sender::new(123, tx, clients);
 
@@ -93,7 +93,7 @@ async fn sender_send() {
 #[tokio::test]
 async fn sender_close() {
     let clients = std::sync::Arc::new(Connections::<mpsc::StreamWriter<Message>>::new());
-    let (tx, mut rx) = tokio::sync::mpsc::channel(5);
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
     let sender = Sender::new(123, tx, clients);
     sender.close().await;
@@ -112,7 +112,7 @@ async fn sender_drop() {
     let clients = std::sync::Arc::new(Connections::<mpsc::StreamWriter<Message>>::new());
     clients.set(123, tx);
 
-    let (tx, mut rx) = tokio::sync::mpsc::channel(5);
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
     let sender = Sender::new(123, tx, clients);
     drop(sender);

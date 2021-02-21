@@ -5,8 +5,10 @@ use crate::server::client::ClientManager;
 use crate::server::user;
 use crate::streams::mpsc;
 
-use log::{debug, error};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use log::error;
+
+mod tokio_rx;
+mod tokio_tx;
 
 /// This Client represents a single Connection a Client Instance
 ///
@@ -85,94 +87,6 @@ impl Client {
         ));
     }
 
-    /// Drains `size` amount of bytes from the Connection
-    async fn drain(read_con: &mut tokio::net::tcp::OwnedReadHalf, size: usize) {
-        let mut tmp_buf = vec![0; size];
-        match read_con.read_exact(&mut tmp_buf).await {
-            Ok(_) => {}
-            Err(e) => {
-                error!("Draining: {}", e);
-            }
-        };
-    }
-
-    async fn receive(
-        id: u32,
-        read_con: &mut tokio::net::tcp::OwnedReadHalf,
-        user_cons: &Connections<mpsc::StreamWriter<Message>>,
-        client_manager: &std::sync::Arc<ClientManager>,
-        obj_pool: &objectpool::Pool<Vec<u8>>,
-    ) -> Result<(), ()> {
-        let mut head_buf = [0; 13];
-        let header = match read_con.read_exact(&mut head_buf).await {
-            Ok(_) => {
-                let h = MessageHeader::deserialize(head_buf);
-                if h.is_none() {
-                    error!("[{}] Deserializing Header: {:?}", id, head_buf);
-                    return Ok(());
-                }
-                h.unwrap()
-            }
-            Err(e) => {
-                error!("[{}] Reading from Client-Connection: {}", id, e);
-                client_manager.remove(id);
-                return Err(());
-            }
-        };
-
-        match header.get_kind() {
-            MessageType::Data => {}
-            MessageType::Close => {
-                user_cons.remove(header.get_id());
-                return Ok(());
-            }
-            MessageType::Heartbeat => {
-                return Ok(());
-            }
-            _ => {
-                error!(
-                    "[{}][{}] Unexpected Operation: {:?}",
-                    id,
-                    header.get_id(),
-                    header.get_kind()
-                );
-                Client::drain(read_con, header.get_length() as usize).await;
-                return Ok(());
-            }
-        };
-
-        let user_id = header.get_id();
-
-        // Forwarding the message to the actual user
-        let stream = match user_cons.get_clone(user_id) {
-            Some(s) => s,
-            None => {
-                // Removes this message and drain all the Data belonging to this message
-                // as well
-                Client::drain(read_con, header.get_length() as usize).await;
-                return Ok(());
-            }
-        };
-
-        let body_length = header.get_length() as usize;
-        let mut body_buf = obj_pool.get();
-        body_buf.resize(body_length, 0);
-        match read_con.read_exact(&mut body_buf).await {
-            Ok(_) => {}
-            Err(e) => {
-                error!("[{}][{}] Reading Body from Client: {}", id, user_id, e);
-            }
-        };
-
-        match stream.send(Message::new_guarded(header, body_buf)) {
-            Ok(_) => {}
-            Err(e) => {
-                error!("[{}][{}] Adding to User-Queue: {}", id, user_id, e);
-            }
-        };
-        Ok(())
-    }
-
     /// This listens to the Client-Connection and forwards the messages to the
     /// correct User-Connections
     ///
@@ -187,12 +101,21 @@ impl Client {
         mut read_con: tokio::net::tcp::OwnedReadHalf,
         user_cons: Connections<mpsc::StreamWriter<Message>>,
         client_manager: std::sync::Arc<ClientManager>,
-        obj_pool: objectpool::Pool<Vec<u8>>,
     ) {
+        let obj_pool: objectpool::Pool<Vec<u8>> = objectpool::Pool::new(100);
+
+        let mut header_buffer = [0; 13];
         loop {
-            if Self::receive(id, &mut read_con, &user_cons, &client_manager, &obj_pool)
-                .await
-                .is_err()
+            if tokio_rx::receive(
+                id,
+                &mut read_con,
+                &user_cons,
+                &client_manager,
+                &obj_pool,
+                &mut header_buffer,
+            )
+            .await
+            .is_err()
             {
                 return;
             }
@@ -215,33 +138,12 @@ impl Client {
     ) {
         let mut h_data = [0; 13];
         loop {
-            let msg = match queue.recv().await {
-                Some(m) => m,
-                None => {
-                    error!("[{}][Sender] Receiving Message from Queue", id);
-                    client_manager.remove(id);
-                    return;
-                }
-            };
-
-            let data = msg.serialize(&mut h_data);
-            match write_con.write_all(&h_data).await {
-                Ok(_) => {}
-                Err(e) => {
-                    error!("[{}][Sender] Sending Message: {}", id, e);
-                    client_manager.remove(id);
-                    return;
-                }
-            };
-            match write_con.write_all(&data).await {
-                Ok(_) => {}
-                Err(e) => {
-                    error!("[{}][Sender] Sending Message: {}", id, e);
-                    client_manager.remove(id);
-                    return;
-                }
-            };
-            debug!("[{}][Sender] Sent out Message", id);
+            if tokio_tx::send(id, &mut write_con, &mut queue, &client_manager, &mut h_data)
+                .await
+                .is_err()
+            {
+                return;
+            }
         }
     }
 }

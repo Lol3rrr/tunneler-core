@@ -1,4 +1,3 @@
-use crate::objectpool::Pool;
 use crate::server::client::{Client, ClientManager};
 
 use rand::Rng;
@@ -7,8 +6,6 @@ use tokio::net::TcpListener;
 use log::{error, info};
 
 mod validate_connection;
-
-const CLIENT_OBJPOOL_SIZE: usize = 100;
 
 pub async fn accept_clients(
     listen: TcpListener,
@@ -40,14 +37,12 @@ pub async fn accept_clients(
 
         let client = Client::new(c_id, clients.clone(), queue_tx);
 
-        let obj_pool = Pool::new(CLIENT_OBJPOOL_SIZE);
         tokio::task::spawn(Client::sender(c_id, tx, queue_rx, clients.clone()));
         tokio::task::spawn(Client::receiver(
             c_id,
             rx,
             client.get_user_cons(),
             clients.clone(),
-            obj_pool.clone(),
         ));
 
         clients.add(client);

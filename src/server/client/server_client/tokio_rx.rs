@@ -8,19 +8,30 @@ use log::error;
 use tokio::io::AsyncReadExt;
 use tokio::net::tcp;
 
+/// Drains `size` amount of bytes from the Connection
+async fn drain(read_con: &mut tokio::net::tcp::OwnedReadHalf, size: usize) {
+    let mut tmp_buf = vec![0; size];
+    match read_con.read_exact(&mut tmp_buf).await {
+        Ok(_) => {}
+        Err(e) => {
+            error!("Draining: {}", e);
+        }
+    };
+}
+
 pub async fn receive(
     id: u32,
     read_con: &mut tcp::OwnedReadHalf,
     user_cons: &Connections<mpsc::StreamWriter<Message>>,
     client_manager: &std::sync::Arc<ClientManager>,
     obj_pool: &Pool<Vec<u8>>,
+    header_buf: &mut [u8; 13],
 ) -> Result<(), ()> {
-    let mut head_buf = [0; 13];
-    let header = match read_con.read_exact(&mut head_buf).await {
+    let header = match read_con.read_exact(header_buf).await {
         Ok(_) => {
-            let h = MessageHeader::deserialize(head_buf);
+            let h = MessageHeader::deserialize(header_buf);
             if h.is_none() {
-                error!("[{}] Deserializing Header: {:?}", id, head_buf);
+                error!("[{}] Deserializing Header: {:?}", id, header_buf);
                 return Ok(());
             }
             h.unwrap()
@@ -48,7 +59,7 @@ pub async fn receive(
                 header.get_id(),
                 header.get_kind()
             );
-            Client::drain(read_con, header.get_length() as usize).await;
+            drain(read_con, header.get_length() as usize).await;
             return Ok(());
         }
     };
@@ -61,7 +72,7 @@ pub async fn receive(
         None => {
             // Removes this message and drain all the Data belonging to this message
             // as well
-            Client::drain(read_con, header.get_length() as usize).await;
+            drain(read_con, header.get_length() as usize).await;
             return Ok(());
         }
     };

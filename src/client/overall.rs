@@ -1,7 +1,6 @@
 use crate::client::queues;
-use crate::connections::{Connection, Connections, Destination};
+use crate::connections::{Connections, Destination};
 use crate::message::{Message, MessageHeader, MessageType};
-use crate::objectpool;
 use crate::streams::mpsc;
 
 use rand::RngCore;
@@ -10,6 +9,8 @@ use std::future::Future;
 use log::{debug, error, info};
 
 mod establish_connection;
+mod rx;
+mod tx;
 
 /// The Client instance in general that is responsible for handling
 /// all the interactions with the Server
@@ -29,11 +30,11 @@ impl Client {
         }
     }
 
-    async fn heartbeat(send_queue: &tokio::sync::mpsc::Sender<Message>) {
+    async fn heartbeat(send_queue: &tokio::sync::mpsc::UnboundedSender<Message>) {
         let msg_header = MessageHeader::new(0, MessageType::Heartbeat, 0);
         let msg = Message::new(msg_header, Vec::new());
 
-        match send_queue.send(msg).await {
+        match send_queue.send(msg) {
             Ok(_) => {
                 debug!("[Heartbeat] Sent");
             }
@@ -45,137 +46,12 @@ impl Client {
     }
 
     async fn heartbeat_loop(
-        send_queue: tokio::sync::mpsc::Sender<Message>,
+        send_queue: tokio::sync::mpsc::UnboundedSender<Message>,
         wait_time: std::time::Duration,
     ) {
         loop {
             Self::heartbeat(&send_queue).await;
             tokio::time::sleep(wait_time).await;
-        }
-    }
-
-    /// Sends all the messages to the server
-    async fn sender(
-        server_con: std::sync::Arc<Connection>,
-        mut queue: tokio::sync::mpsc::Receiver<Message>,
-    ) {
-        let mut h_data = [0; 13];
-        loop {
-            let msg = match queue.recv().await {
-                Some(m) => m,
-                None => {
-                    info!("[Sender] All Queue-Senders have been closed");
-                    return;
-                }
-            };
-
-            let data = msg.serialize(&mut h_data);
-            match server_con.write_total(&h_data, h_data.len()).await {
-                Ok(_) => {
-                    debug!("[Sender] Sent Header");
-                }
-                Err(e) => {
-                    error!("Sending Header: {}", e);
-                    return;
-                }
-            };
-            match server_con.write_total(data, data.len()).await {
-                Ok(_) => {
-                    debug!("[Sender] Sent Data");
-                }
-                Err(e) => {
-                    error!("[Sender] Sending Data: {}", e);
-                    return;
-                }
-            };
-        }
-    }
-
-    /// Receives all the messages from the server
-    ///
-    /// Then adds the message to the matching connection queue.
-    /// If there is no matching queue, it creates and starts a new client,
-    /// which will then be placed into the Connection Manager for further
-    /// requests
-    async fn receiver<F, Fut, T>(
-        server_con: std::sync::Arc<Connection>,
-        send_queue: tokio::sync::mpsc::Sender<Message>,
-        client_cons: std::sync::Arc<Connections<mpsc::StreamWriter<Message>>>,
-        start_handler: &F,
-        handler_data: &Option<T>,
-        obj_pool: objectpool::Pool<Vec<u8>>,
-    ) where
-        F: Fn(u32, mpsc::StreamReader<Message>, queues::Sender, Option<T>) -> Fut,
-        Fut: Future<Output = ()>,
-        T: Sized + Send + Clone,
-    {
-        loop {
-            let mut head_buf = [0; 13];
-            let header = match server_con.read_total(&mut head_buf, 13).await {
-                Ok(_) => match MessageHeader::deserialize(head_buf) {
-                    Some(s) => s,
-                    None => {
-                        error!("[Receiver] Deserializing Header: {:?}", head_buf);
-                        return;
-                    }
-                },
-                Err(e) => {
-                    error!("[Receiver] Reading Data: {}", e);
-                    return;
-                }
-            };
-
-            let id = header.get_id();
-            let kind = header.get_kind();
-            match kind {
-                MessageType::Close => {
-                    client_cons.remove(id);
-                    continue;
-                }
-                MessageType::Data => {}
-                _ => {
-                    error!("[Receiver] Unexpected Operation: {:?}", kind);
-                    continue;
-                }
-            };
-
-            let data_length = header.get_length() as usize;
-            let mut buf = obj_pool.get();
-            buf.resize(data_length, 0);
-
-            let msg = match server_con.read_total(&mut buf, data_length).await {
-                Ok(_) => Message::new_guarded(header, buf),
-                Err(e) => {
-                    error!("[Receiver] Receiving Data: {}", e);
-                    client_cons.remove(id);
-                    continue;
-                }
-            };
-
-            let con_queue = match client_cons.get_clone(id) {
-                Some(q) => q.clone(),
-                // In case there is no matching user-connection, create a new one
-                None => {
-                    // Setup the send channel for requests for this user
-                    let (tx, handle_rx) = mpsc::stream();
-                    // Add the Connection to the current map of user-connection
-                    client_cons.set(id, tx.clone());
-
-                    let handle_tx =
-                        queues::Sender::new(id, send_queue.clone(), client_cons.clone());
-
-                    start_handler(id, handle_rx, handle_tx, handler_data.clone()).await;
-                    tx
-                }
-            };
-
-            match con_queue.send(msg) {
-                Ok(_) => {}
-                Err(e) => {
-                    error!("[Receiver] Adding to Queue for {}: {}", id, e);
-                    continue;
-                }
-            };
         }
     }
 
@@ -238,24 +114,22 @@ impl Client {
 
             attempts = 0;
 
-            let (queue_tx, queue_rx) = tokio::sync::mpsc::channel(50);
+            let (queue_tx, queue_rx) = tokio::sync::mpsc::unbounded_channel();
             let outgoing = std::sync::Arc::new(Connections::<mpsc::StreamWriter<Message>>::new());
 
-            tokio::task::spawn(Self::sender(connection_arc.clone(), queue_rx));
+            tokio::task::spawn(tx::sender(connection_arc.clone(), queue_rx));
 
             tokio::task::spawn(Self::heartbeat_loop(
                 queue_tx.clone(),
                 std::time::Duration::from_secs(15),
             ));
 
-            let obj_pool = objectpool::Pool::new(100);
-            Client::receiver(
+            rx::receiver(
                 connection_arc,
                 queue_tx.clone(),
                 outgoing,
                 &start_handler,
                 &start_handler_data,
-                obj_pool,
             )
             .await;
         }
@@ -264,7 +138,7 @@ impl Client {
 
 #[tokio::test]
 async fn heartbeat() {
-    let (tx, mut rx) = tokio::sync::mpsc::channel(10);
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
     Client::heartbeat(&tx).await;
 

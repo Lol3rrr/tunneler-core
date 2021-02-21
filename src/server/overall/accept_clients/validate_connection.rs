@@ -50,7 +50,7 @@ pub async fn validate_connection(con: &mut tokio::net::TcpStream, key: &[u8]) ->
     let mut head_buf = [0; 13];
     let header = match con.read_exact(&mut head_buf).await {
         Ok(_) => {
-            let msg = MessageHeader::deserialize(head_buf);
+            let msg = MessageHeader::deserialize(&head_buf);
             if msg.is_none() {
                 return false;
             }

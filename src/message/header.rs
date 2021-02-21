@@ -20,7 +20,7 @@ impl MessageHeader {
     }
 
     /// Deserializes a 13-Byte array into the fitting Message-Header
-    pub fn deserialize(raw_data: [u8; 13]) -> Option<MessageHeader> {
+    pub fn deserialize(raw_data: &[u8; 13]) -> Option<MessageHeader> {
         let id_part = &raw_data[0..4];
         let kind_part = raw_data[4];
         let length_part = &raw_data[5..13];
@@ -96,7 +96,7 @@ fn message_header_deserialize_connect() {
             kind: MessageType::Connect,
             length: 20,
         }),
-        MessageHeader::deserialize(input)
+        MessageHeader::deserialize(&input)
     );
 }
 
@@ -105,7 +105,7 @@ fn serialize_deserialize() {
     let first = MessageHeader::new(123, MessageType::Data, 123);
     let mut serialized = [0; 13];
     first.serialize(&mut serialized);
-    let deserialized = MessageHeader::deserialize(serialized);
+    let deserialized = MessageHeader::deserialize(&serialized);
 
     assert_eq!(true, deserialized.is_some());
     assert_eq!(first, deserialized.unwrap());

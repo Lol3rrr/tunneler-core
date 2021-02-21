@@ -18,7 +18,7 @@ pub async fn establish_connection(adr: &str, key: &[u8]) -> Option<std::sync::Ar
     let mut head_buf = [0; 13];
     let header = match connection_arc.read_total(&mut head_buf, 13).await {
         Ok(_) => {
-            let msg = MessageHeader::deserialize(head_buf);
+            let msg = MessageHeader::deserialize(&head_buf);
             msg.as_ref()?;
             msg.unwrap()
         }
@@ -76,7 +76,7 @@ pub async fn establish_connection(adr: &str, key: &[u8]) -> Option<std::sync::Ar
 
     let mut buf = [0; 13];
     let header = match connection_arc.read_total(&mut buf, 13).await {
-        Ok(_) => match MessageHeader::deserialize(buf) {
+        Ok(_) => match MessageHeader::deserialize(&buf) {
             Some(c) => c,
             None => {
                 return None;

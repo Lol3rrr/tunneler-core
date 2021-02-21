@@ -3,9 +3,10 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use tunneler_core::message::{Message, MessageHeader, MessageType};
 
 pub fn criterion_benchmark(c: &mut Criterion) {
-    let data = [0; 13];
+    let mut data = [0; 13];
+    MessageHeader::new(132, MessageType::Data, 200).serialize(&mut data);
     c.bench_function("Deserialize-Message-Header", |b| {
-        b.iter(|| MessageHeader::deserialize(data))
+        b.iter(|| MessageHeader::deserialize(&data))
     });
     let header = MessageHeader::new(132, MessageType::Data, 200);
     let mut serialize_out = [0; 13];

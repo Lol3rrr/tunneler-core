@@ -10,6 +10,7 @@ pub async fn send(
     write_con: &mut tcp::OwnedWriteHalf,
     queue: &mut tokio::sync::mpsc::UnboundedReceiver<Message>,
     client_manager: &std::sync::Arc<ClientManager>,
+    header_buf: &mut [u8; 13],
 ) -> Result<(), ()> {
     let msg = match queue.recv().await {
         Some(m) => m,
@@ -20,8 +21,8 @@ pub async fn send(
         }
     };
 
-    let (h_data, data) = msg.serialize();
-    match write_con.write_all(&h_data).await {
+    let data = msg.serialize(header_buf);
+    match write_con.write_all(header_buf).await {
         Ok(_) => {}
         Err(e) => {
             error!("[{}][Sender] Sending Message: {}", id, e);
