@@ -1,6 +1,6 @@
 use crate::message::{Message, MessageHeader, MessageType};
 
-use log::error;
+use log::{debug, error};
 use tokio::io::AsyncReadExt;
 
 const BUFFER_SIZE: usize = 4096;
@@ -65,9 +65,6 @@ pub async fn recv<F>(
                         break;
                     }
                 };
-            }
-            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                continue;
             }
             Err(e) => {
                 error!("[{}][{}] Reading from User-Con: {}", client_id, user_id, e);
