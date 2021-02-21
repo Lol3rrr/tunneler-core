@@ -32,6 +32,21 @@ pub async fn recv<F>(
         // a false positive.
         match con.read(&mut buf).await {
             Ok(0) => {
+                // Package the Users-Data in a new custom-message
+                let header = MessageHeader::new(user_id, MessageType::EOF, 0);
+                let msg = Message::new(header, buf);
+
+                // Puts the message in the queue to be send to the client
+                match send_queue.send(msg) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        error!(
+                            "[{}][{}] Forwarding EOF message to client: {}",
+                            client_id, user_id, e
+                        );
+                    }
+                };
+
                 break;
             }
             Ok(n) => {

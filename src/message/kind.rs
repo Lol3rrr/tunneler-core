@@ -28,6 +28,8 @@ pub enum MessageType {
     /// This is the 4. and last message of the Handshake which is simply
     /// send by the Server to acknowledge the new connection established
     Acknowledge,
+    /// Signals the EOF from a request that is not yet closed
+    EOF,
 }
 
 impl MessageType {
@@ -46,6 +48,7 @@ impl MessageType {
             6 => Some(MessageType::Key),
             7 => Some(MessageType::Verify),
             8 => Some(MessageType::Acknowledge),
+            9 => Some(MessageType::EOF),
             _ => None,
         }
     }
@@ -62,6 +65,7 @@ impl MessageType {
             MessageType::Key => 6,
             MessageType::Verify => 7,
             MessageType::Acknowledge => 8,
+            MessageType::EOF => 9,
         }
     }
 }
@@ -99,6 +103,10 @@ fn message_type_deserialize_acknowledge() {
     assert_eq!(Some(MessageType::Acknowledge), MessageType::deserialize(8));
 }
 #[test]
+fn message_type_deserialize_eof() {
+    assert_eq!(Some(MessageType::EOF), MessageType::deserialize(9));
+}
+#[test]
 fn message_type_deserialize_invalid() {
     assert_eq!(None, MessageType::deserialize(123));
 }
@@ -134,4 +142,8 @@ fn message_type_serialize_verify() {
 #[test]
 fn message_type_serialize_acknowledge() {
     assert_eq!(8, MessageType::Acknowledge.serialize());
+}
+#[test]
+fn message_type_serialize_eof() {
+    assert_eq!(9, MessageType::EOF.serialize());
 }

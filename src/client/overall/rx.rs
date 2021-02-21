@@ -23,7 +23,8 @@ pub async fn receiver<F, Fut, T>(
     handler_data: &Option<T>,
 ) where
     F: Fn(u32, mpsc::StreamReader<Message>, queues::Sender, Option<T>) -> Fut,
-    Fut: Future<Output = ()>,
+    Fut: Future + Send + 'static,
+    Fut::Output: Send,
     T: Sized + Send + Clone,
 {
     let mut head_buf = [0; 13];
@@ -51,7 +52,7 @@ pub async fn receiver<F, Fut, T>(
                 client_cons.remove(id);
                 continue;
             }
-            MessageType::Data => {}
+            MessageType::Data | MessageType::EOF => {}
             _ => {
                 error!("Unexpected Operation: {:?}", kind);
                 continue;
@@ -82,7 +83,12 @@ pub async fn receiver<F, Fut, T>(
 
                 let handle_tx = queues::Sender::new(id, send_queue.clone(), client_cons.clone());
 
-                start_handler(id, handle_rx, handle_tx, handler_data.clone()).await;
+                tokio::task::spawn(start_handler(
+                    id,
+                    handle_rx,
+                    handle_tx,
+                    handler_data.clone(),
+                ));
                 tx
             }
         };

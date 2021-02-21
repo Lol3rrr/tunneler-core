@@ -1,8 +1,5 @@
-use crate::message::{Data, MessageHeader};
+use crate::message::{Data, MessageHeader, MessageType};
 use crate::objectpool::Guard;
-
-#[cfg(test)]
-use crate::message::MessageType;
 
 /// A single Message that is send between the Server and Client
 #[derive(Debug, PartialEq)]
@@ -51,6 +48,14 @@ impl Message {
             Data::Raw(ref r) => &r,
             Data::Pooled(ref p) => &p,
         }
+    }
+
+    /// Checks if the messsage is marked as an EOF(End-Of-File)
+    ///
+    /// This is useful for cases where the requests may be over, but the
+    /// connections are not actually closed
+    pub fn is_eof(&self) -> bool {
+        self.header.kind == MessageType::EOF
     }
 }
 
@@ -132,4 +137,19 @@ fn message_serialize_length_less_than_vec_size() {
     let mut data_expect = vec![0; 12];
     data_expect[2] = 33;
     assert_eq!(&data_expect, d_output);
+}
+
+#[test]
+fn message_is_eof() {
+    let header = MessageHeader::new(0, MessageType::EOF, 0);
+    let msg = Message::new(header, vec![]);
+
+    assert_eq!(true, msg.is_eof());
+}
+#[test]
+fn message_is_not_eof() {
+    let header = MessageHeader::new(0, MessageType::Data, 0);
+    let msg = Message::new(header, vec![]);
+
+    assert_eq!(false, msg.is_eof());
 }

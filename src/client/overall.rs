@@ -60,18 +60,20 @@ impl Client {
     /// This function essentially never returns and should
     /// therefor be run in an independant task
     ///
-    /// The handler will be called for every new user-connection that is
-    /// received together with the provided handler Data
-    ///
     /// The Handler will be passed as arguments:
     /// * The ID of the new user-connection
     /// * A Reader where all the Messages for this user can be read from
     /// * A Writer which can be used to send data back to the user
     /// * The handler_data that can be used to share certain information when needed
+    ///
+    /// The `start_handler` is only ever called once for every new connection in a
+    /// seperate tokio::Task
+    /// All Messages the Handler receives only Data or EOF Messages
     pub async fn start<F, Fut, T>(self, start_handler: F, start_handler_data: Option<T>) -> !
     where
         F: Fn(u32, mpsc::StreamReader<Message>, queues::Sender, Option<T>) -> Fut,
-        Fut: Future<Output = ()>,
+        Fut: Future + Send + 'static,
+        Fut::Output: Send,
         T: Sized + Send + Clone,
     {
         info!("Starting...");
