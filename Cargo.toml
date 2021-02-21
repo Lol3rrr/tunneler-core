@@ -1,6 +1,6 @@
 [package]
 name = "tunneler-core"
-version = "0.5.0"
+version = "0.6.1"
 authors = ["lol3rrr <s.loler03@gmail.com>"]
 edition = "2018"
 license = "MIT"
