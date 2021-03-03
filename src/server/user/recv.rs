@@ -1,6 +1,6 @@
 use crate::message::{Message, MessageHeader, MessageType};
 
-use log::{debug, error};
+use log::error;
 use tokio::io::AsyncReadExt;
 
 const BUFFER_SIZE: usize = 4096;
