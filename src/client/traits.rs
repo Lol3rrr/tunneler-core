@@ -15,7 +15,7 @@ use super::queues;
 #[async_trait]
 pub trait Receiver {
     /// Receives a single Message over the Connection
-    async fn recv(&mut self) -> Result<Message, RecvError>;
+    async fn recv_msg(&mut self) -> Result<Message, RecvError>;
 }
 
 /// A Generic trait that abstract away the actual underlying
@@ -24,19 +24,19 @@ pub trait Receiver {
 #[async_trait]
 pub trait Sender {
     /// Sends a single Message over the Connection
-    async fn send(&self, data: Vec<u8>, lenth: u64) -> bool;
+    async fn send_msg(&self, data: Vec<u8>, lenth: u64) -> bool;
 }
 
 #[async_trait]
 impl Receiver for mpsc::StreamReader<Message> {
-    async fn recv(&mut self) -> Result<Message, RecvError> {
-        mpsc::StreamReader::<Message>::recv(self).await
+    async fn recv_msg(&mut self) -> Result<Message, RecvError> {
+        self.recv().await
     }
 }
 
 #[async_trait]
 impl Sender for queues::Sender {
-    async fn send(&self, data: Vec<u8>, length: u64) -> bool {
-        queues::Sender::send(self, data, length).await
+    async fn send_msg(&self, data: Vec<u8>, length: u64) -> bool {
+        self.send(data, length).await
     }
 }

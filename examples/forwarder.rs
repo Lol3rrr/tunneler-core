@@ -1,16 +1,12 @@
-use tunneler_core::client::queues;
-use tunneler_core::message::Message;
-use tunneler_core::streams::mpsc;
-
 use tunneler_core::client::{Receiver, Sender};
 
-async fn handler<R, S>(id: u32, reader: R, sender: S, data: Option<u64>)
+async fn handler<R, S>(id: u32, _reader: R, sender: S, _data: Option<u64>)
 where
     R: Receiver + Sized + Send,
     S: Sender + Sized + Send,
 {
     println!("Handling: {}", id);
-    sender.send(vec![b't', b'e', b's', b't'], 4).await;
+    sender.send_msg(vec![b't', b'e', b's', b't'], 4).await;
 }
 
 fn main() {

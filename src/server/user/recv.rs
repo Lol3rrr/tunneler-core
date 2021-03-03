@@ -31,27 +31,15 @@ pub async fn recv<F>(
         // this may still fail with `WouldBlock` if the readiness event is
         // a false positive.
         match con.read(&mut buf).await {
-            Ok(0) => {
-                // Package the Users-Data in a new custom-message
-                let header = MessageHeader::new(user_id, MessageType::EOF, 0);
-                let msg = Message::new(header, buf);
-
-                // Puts the message in the queue to be send to the client
-                match send_queue.send(msg) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        error!(
-                            "[{}][{}] Forwarding EOF message to client: {}",
-                            client_id, user_id, e
-                        );
-                    }
+            Ok(n) => {
+                let message_type = if n > 0 {
+                    MessageType::Data
+                } else {
+                    MessageType::EOF
                 };
 
-                break;
-            }
-            Ok(n) => {
                 // Package the Users-Data in a new custom-message
-                let header = MessageHeader::new(user_id, MessageType::Data, n as u64);
+                let header = MessageHeader::new(user_id, message_type, n as u64);
                 let msg = Message::new(header, buf);
 
                 // Puts the message in the queue to be send to the client
@@ -65,6 +53,10 @@ pub async fn recv<F>(
                         break;
                     }
                 };
+
+                if n == 0 {
+                    break;
+                }
             }
             Err(e) => {
                 error!("[{}][{}] Reading from User-Con: {}", client_id, user_id, e);
