@@ -23,13 +23,8 @@ where
         }
     };
 
-    let data = msg.serialize(head_buf);
-    if let Err(e) = con.write_full(head_buf).await {
-        error!("Sending Header: {}", e);
-        return false;
-    }
-    if let Err(e) = con.write_full(data).await {
-        error!("Sending Data: {}", e);
+    if let Err(e) = con.write_msg(&msg, head_buf).await {
+        error!("Sending Message: {}", e);
         return false;
     }
 

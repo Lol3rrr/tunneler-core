@@ -1,33 +1,24 @@
 use crate::connections::Connections;
+use crate::general::ConnectionReader;
 use crate::message::{Message, MessageHeader, MessageType};
 use crate::objectpool::Pool;
 use crate::server::client::ClientManager;
 use crate::streams::mpsc;
 
 use log::error;
-use tokio::io::AsyncReadExt;
-use tokio::net::tcp;
 
-/// Drains `size` amount of bytes from the Connection
-async fn drain(read_con: &mut tokio::net::tcp::OwnedReadHalf, size: usize) {
-    let mut tmp_buf = vec![0; size];
-    match read_con.read_exact(&mut tmp_buf).await {
-        Ok(_) => {}
-        Err(e) => {
-            error!("Draining: {}", e);
-        }
-    };
-}
-
-pub async fn receive(
+pub async fn receive<C>(
     id: u32,
-    read_con: &mut tcp::OwnedReadHalf,
+    read_con: &mut C,
     user_cons: &Connections<mpsc::StreamWriter<Message>>,
     client_manager: &std::sync::Arc<ClientManager>,
     obj_pool: &Pool<Vec<u8>>,
     header_buf: &mut [u8; 13],
-) -> Result<(), ()> {
-    let header = match read_con.read_exact(header_buf).await {
+) -> Result<(), ()>
+where
+    C: ConnectionReader + Send,
+{
+    let header = match read_con.read_full(header_buf).await {
         Ok(_) => {
             let h = MessageHeader::deserialize(header_buf);
             if h.is_none() {
@@ -59,7 +50,7 @@ pub async fn receive(
                 header.get_id(),
                 header.get_kind()
             );
-            drain(read_con, header.get_length() as usize).await;
+            read_con.drain(header.get_length() as usize).await;
             return Ok(());
         }
     };
@@ -72,7 +63,7 @@ pub async fn receive(
         None => {
             // Removes this message and drain all the Data belonging to this message
             // as well
-            drain(read_con, header.get_length() as usize).await;
+            read_con.drain(header.get_length() as usize).await;
             return Ok(());
         }
     };
@@ -80,7 +71,7 @@ pub async fn receive(
     let body_length = header.get_length() as usize;
     let mut body_buf = obj_pool.get();
     body_buf.resize(body_length, 0);
-    match read_con.read_exact(&mut body_buf).await {
+    match read_con.read_full(&mut body_buf).await {
         Ok(_) => {}
         Err(e) => {
             error!("[{}][{}] Reading Body from Client: {}", id, user_id, e);

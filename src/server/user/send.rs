@@ -1,8 +1,8 @@
+use crate::general::ConnectionWriter;
 use crate::message::Message;
 use crate::streams::{error::RecvError, mpsc};
 
 use log::error;
-use tokio::io::AsyncWriteExt;
 
 /// Reads messages from the Client for this User and sends them to the User
 ///
@@ -11,12 +11,14 @@ use tokio::io::AsyncWriteExt;
 /// * user_id: The ID of the User for this connection
 /// * con: The User-Connection
 /// * queue: The Queue for messages that need to be send to the user
-pub async fn send(
+pub async fn send<C>(
     client_id: u32,
     user_id: u32,
-    mut con: tokio::net::tcp::OwnedWriteHalf,
+    mut con: C,
     mut queue: mpsc::StreamReader<Message>,
-) {
+) where
+    C: ConnectionWriter,
+{
     loop {
         let msg = match queue.recv().await {
             Ok(m) => m,
@@ -29,7 +31,7 @@ pub async fn send(
         };
 
         let data = msg.get_data();
-        match con.write_all(&data).await {
+        match con.write_full(&data).await {
             Ok(_) => {}
             Err(e) => {
                 error!("[{}][{}] Sending to User: {}", client_id, user_id, e);

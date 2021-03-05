@@ -1,17 +1,18 @@
-use crate::message::Message;
 use crate::server::client::ClientManager;
+use crate::{general::ConnectionWriter, message::Message};
 
 use log::error;
-use tokio::io::AsyncWriteExt;
-use tokio::net::tcp;
 
-pub async fn send(
+pub async fn send<C>(
     id: u32,
-    write_con: &mut tcp::OwnedWriteHalf,
+    write_con: &mut C,
     queue: &mut tokio::sync::mpsc::UnboundedReceiver<Message>,
     client_manager: &std::sync::Arc<ClientManager>,
     header_buf: &mut [u8; 13],
-) -> Result<(), ()> {
+) -> Result<(), ()>
+where
+    C: ConnectionWriter + Send,
+{
     let msg = match queue.recv().await {
         Some(m) => m,
         None => {
@@ -21,23 +22,11 @@ pub async fn send(
         }
     };
 
-    let data = msg.serialize(header_buf);
-    match write_con.write_all(header_buf).await {
-        Ok(_) => {}
-        Err(e) => {
-            error!("[{}][Sender] Sending Message: {}", id, e);
-            client_manager.remove(id);
-            return Err(());
-        }
-    };
-    match write_con.write_all(&data).await {
-        Ok(_) => {}
-        Err(e) => {
-            error!("[{}][Sender] Sending Message: {}", id, e);
-            client_manager.remove(id);
-            return Err(());
-        }
-    };
+    if let Err(e) = write_con.write_msg(&msg, header_buf).await {
+        error!("[{}][Sender] Sending Message: {}", id, e);
+        client_manager.remove(id);
+        return Err(());
+    }
 
     Ok(())
 }
