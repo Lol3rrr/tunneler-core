@@ -141,9 +141,9 @@ pub async fn receiver<F, Fut, T, R>(
 #[cfg(test)]
 async fn test_handler(
     id: u32,
-    reader: mpsc::StreamReader<Message>,
-    sender: queues::Sender,
-    data: Option<u64>,
+    _reader: mpsc::StreamReader<Message>,
+    _sender: queues::Sender,
+    _data: Option<u64>,
 ) {
     println!("Started: {}", id);
 }

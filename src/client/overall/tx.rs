@@ -4,6 +4,7 @@ use log::{debug, error};
 
 #[cfg(test)]
 use crate::general::mocks;
+#[cfg(test)]
 use crate::message::{MessageHeader, MessageType};
 
 async fn send_single<C>(
