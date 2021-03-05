@@ -19,3 +19,5 @@ pub(crate) mod objectpool;
 pub mod server;
 /// Provides all the Stream/Queue related functionality
 pub mod streams;
+
+pub(crate) mod general;

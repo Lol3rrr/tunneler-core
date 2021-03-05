@@ -2,7 +2,7 @@ use crate::message::{Data, MessageHeader, MessageType};
 use crate::objectpool::Guard;
 
 /// A single Message that is send between the Server and Client
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct Message {
     header: MessageHeader,
     data: Data<Vec<u8>>, // X bytes
@@ -56,6 +56,12 @@ impl Message {
     /// connections are not actually closed
     pub fn is_eof(&self) -> bool {
         self.header.kind == MessageType::EOF
+    }
+}
+
+impl PartialEq for Message {
+    fn eq(&self, other: &Self) -> bool {
+        self.header == other.header && self.get_data() == other.get_data()
     }
 }
 
