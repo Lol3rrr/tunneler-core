@@ -7,6 +7,10 @@ use crate::message::Message;
 /// Used to read from an actual TCP-Connection
 #[async_trait]
 pub trait ConnectionReader {
+    /// Reads an arbitrary amount of bytes from the Connection
+    /// to at most fill the buffer
+    async fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize>;
+
     /// Reads from the Connection until the Buffer is filled
     async fn read_full(&mut self, buf: &mut [u8]) -> std::io::Result<usize>;
 
@@ -46,6 +50,10 @@ impl<T> ConnectionReader for T
 where
     T: AsyncReadExt + Send + Unpin,
 {
+    async fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.read(buf).await
+    }
+
     async fn read_full(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         self.read_exact(buf).await
     }

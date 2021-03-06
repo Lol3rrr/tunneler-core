@@ -10,12 +10,18 @@ use async_trait::async_trait;
 #[derive(Debug)]
 pub struct Reader {
     data: Vec<u8>,
+    eof_returned: bool,
+    close_on_eof: bool,
 }
 
 impl Reader {
     /// Creates a new empty Reader
     pub fn new() -> Self {
-        Self { data: Vec::new() }
+        Self {
+            data: Vec::new(),
+            eof_returned: false,
+            close_on_eof: false,
+        }
     }
 
     /// Adds the serialized Message to the internal chunks
@@ -27,10 +33,40 @@ impl Reader {
         self.data.extend_from_slice(&head[..]);
         self.data.extend_from_slice(body);
     }
+
+    /// Adds the raw bytes to the internal buffer
+    pub fn add_bytes(&mut self, tmp: &[u8]) {
+        self.data.extend_from_slice(tmp);
+    }
+
+    /// The last call to read when the buffer
+    /// is empty and has already returned EOF,
+    /// will return an error indicating that the
+    /// connection has been closed
+    pub fn close(&mut self) {
+        self.close_on_eof = true;
+    }
 }
 
 #[async_trait]
 impl ConnectionReader for Reader {
+    async fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let data_length = self.data.len();
+        let buf_length = buf.len();
+        let read_length = std::cmp::min(data_length, buf_length);
+        if read_length == 0 && self.eof_returned && self.close_on_eof {
+            return Err(std::io::Error::from(std::io::ErrorKind::BrokenPipe));
+        }
+        if read_length == 0 {
+            self.eof_returned = true;
+        }
+
+        for (index, tmp) in self.data.drain(0..read_length).enumerate() {
+            buf[index] = tmp;
+        }
+        Ok(read_length)
+    }
+
     async fn read_full(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let data_length = self.data.len();
         if data_length == 0 {
@@ -97,4 +133,79 @@ async fn read_message() {
     let eof_result = tmp.read_full(&mut empty).await;
     assert_eq!(true, eof_result.is_ok());
     assert_eq!(0, eof_result.unwrap());
+}
+
+#[tokio::test]
+async fn read_fits() {
+    let mut tmp = Reader::new();
+
+    tmp.add_bytes(&vec![0, 1, 2, 3, 4, 5]);
+
+    let mut buffer = [0u8; 6];
+    let read_result = tmp.read(&mut buffer).await;
+    assert_eq!(true, read_result.is_ok());
+    assert_eq!(6, read_result.unwrap());
+    assert_eq!(&vec![0, 1, 2, 3, 4, 5], &buffer);
+
+    let eof_result = tmp.read(&mut buffer).await;
+    assert_eq!(true, eof_result.is_ok());
+    assert_eq!(0, eof_result.unwrap());
+}
+#[tokio::test]
+async fn read_buffer_is_bigger() {
+    let mut tmp = Reader::new();
+
+    tmp.add_bytes(&vec![0, 1, 2, 3, 4, 5]);
+
+    let mut buffer = [0u8; 8];
+    let read_result = tmp.read(&mut buffer).await;
+    assert_eq!(true, read_result.is_ok());
+    assert_eq!(6, read_result.unwrap());
+    assert_eq!(&vec![0, 1, 2, 3, 4, 5], &buffer[0..6]);
+
+    let eof_result = tmp.read(&mut buffer).await;
+    assert_eq!(true, eof_result.is_ok());
+    assert_eq!(0, eof_result.unwrap());
+}
+#[tokio::test]
+async fn read_buffer_is_smaller_multiple_reads() {
+    let mut tmp = Reader::new();
+
+    tmp.add_bytes(&vec![0, 1, 2, 3, 4, 5]);
+
+    let mut buffer = [0u8; 3];
+    let read_result = tmp.read(&mut buffer).await;
+    assert_eq!(true, read_result.is_ok());
+    assert_eq!(3, read_result.unwrap());
+    assert_eq!(&vec![0, 1, 2], &buffer[0..3]);
+
+    let read_result = tmp.read(&mut buffer).await;
+    assert_eq!(true, read_result.is_ok());
+    assert_eq!(3, read_result.unwrap());
+    assert_eq!(&vec![3, 4, 5], &buffer[0..3]);
+
+    let eof_result = tmp.read(&mut buffer).await;
+    assert_eq!(true, eof_result.is_ok());
+    assert_eq!(0, eof_result.unwrap());
+}
+
+#[tokio::test]
+async fn read_fits_with_close() {
+    let mut tmp = Reader::new();
+
+    tmp.add_bytes(&vec![0, 1, 2, 3, 4, 5]);
+    tmp.close();
+
+    let mut buffer = [0u8; 6];
+    let read_result = tmp.read(&mut buffer).await;
+    assert_eq!(true, read_result.is_ok());
+    assert_eq!(6, read_result.unwrap());
+    assert_eq!(&vec![0, 1, 2, 3, 4, 5], &buffer);
+
+    let eof_result = tmp.read(&mut buffer).await;
+    assert_eq!(true, eof_result.is_ok());
+    assert_eq!(0, eof_result.unwrap());
+
+    let close_result = tmp.read(&mut buffer).await;
+    assert_eq!(true, close_result.is_err());
 }
