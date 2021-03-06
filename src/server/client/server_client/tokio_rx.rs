@@ -19,14 +19,13 @@ where
     C: ConnectionReader + Send,
 {
     let header = match read_con.read_full(header_buf).await {
-        Ok(_) => {
-            let h = MessageHeader::deserialize(header_buf);
-            if h.is_none() {
+        Ok(_) => match MessageHeader::deserialize(header_buf) {
+            Some(h) => h,
+            None => {
                 error!("[{}] Deserializing Header: {:?}", id, header_buf);
                 return Ok(());
             }
-            h.unwrap()
-        }
+        },
         Err(e) => {
             error!("[{}] Reading from Client-Connection: {}", id, e);
             client_manager.remove(id);

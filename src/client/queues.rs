@@ -63,14 +63,9 @@ impl Drop for Sender {
         debug!("[Sender][{}] Removed Connection", self.id);
 
         let close_msg = Message::new(MessageHeader::new(self.id, MessageType::Close, 0), vec![]);
-        match self.tx.send(close_msg) {
-            Ok(_) => {
-                debug!("[Sender][{}] Sent Close", self.id);
-            }
-            Err(e) => {
-                error!("Sending Close-Message for {}: {}", self.id, e);
-            }
-        };
+        if let Err(e) = self.tx.send(close_msg) {
+            error!("Sending Close-Message for {}: {}", self.id, e);
+        }
     }
 }
 

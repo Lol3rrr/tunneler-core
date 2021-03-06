@@ -9,7 +9,7 @@ use crate::general::mocks;
 
 use std::future::Future;
 
-use log::error;
+use log::{debug, error};
 
 /// Returns
 /// * True if everything went alright and there are more
@@ -53,6 +53,19 @@ where
             return true;
         }
         MessageType::Data | MessageType::EOF => {}
+        // A new connection should be established for the given ID
+        MessageType::Connect => {
+            // Setup the send channel for requests for this user
+            let (tx, handle_rx) = mpsc::stream();
+            // Add the Connection to the current map of user-connection
+            client_cons.set(id, tx.clone());
+            let handle_tx = queues::Sender::new(id, send_queue.clone(), client_cons.clone());
+            tokio::task::spawn(start_handler(id, handle_rx, handle_tx, handler_data));
+
+            debug!("Established new Connection: {}", id);
+
+            return true;
+        }
         _ => {
             error!("Unexpected Operation: {:?}", kind);
             return true;
@@ -76,15 +89,8 @@ where
         Some(q) => q,
         // In case there is no matching user-connection, create a new one
         None => {
-            // Setup the send channel for requests for this user
-            let (tx, handle_rx) = mpsc::stream();
-            // Add the Connection to the current map of user-connection
-            client_cons.set(id, tx.clone());
-
-            let handle_tx = queues::Sender::new(id, send_queue.clone(), client_cons.clone());
-
-            tokio::task::spawn(start_handler(id, handle_rx, handle_tx, handler_data));
-            tx
+            error!("Received Data for non-existing Connection: {}", id);
+            return true;
         }
     };
 
@@ -149,40 +155,6 @@ async fn test_handler(
 }
 
 #[tokio::test]
-async fn valid_starts_handler() {
-    let id = 13;
-
-    let mut tmp_reader = mocks::MockReader::new();
-    tmp_reader.add_message(Message::new(
-        MessageHeader::new(id, MessageType::Data, 10),
-        vec![3; 10],
-    ));
-
-    let (queue_tx, _) = tokio::sync::mpsc::unbounded_channel();
-
-    let client_cons = std::sync::Arc::new(Connections::<mpsc::StreamWriter<Message>>::new());
-
-    let mut head_buf = [0; 13];
-    let obj_pool = objectpool::Pool::new(2);
-
-    let result = receive_single(
-        &mut tmp_reader,
-        &queue_tx,
-        &client_cons,
-        &test_handler,
-        None,
-        &mut head_buf,
-        &obj_pool,
-    )
-    .await;
-
-    assert_eq!(true, result);
-
-    let connection_queue = client_cons.get_clone(id);
-    assert_eq!(true, connection_queue.is_some());
-}
-
-#[tokio::test]
 async fn valid_sends_data_to_correct_handler() {
     let id = 13;
 
@@ -222,4 +194,38 @@ async fn valid_sends_data_to_correct_handler() {
         )),
         client_rx.recv().await
     );
+}
+
+#[tokio::test]
+async fn valid_establish_connection() {
+    let id = 13;
+
+    let mut tmp_reader = mocks::MockReader::new();
+    tmp_reader.add_message(Message::new(
+        MessageHeader::new(id, MessageType::Connect, 0),
+        vec![],
+    ));
+
+    let (queue_tx, _) = tokio::sync::mpsc::unbounded_channel();
+
+    let client_cons = std::sync::Arc::new(Connections::<mpsc::StreamWriter<Message>>::new());
+
+    let mut head_buf = [0; 13];
+    let obj_pool = objectpool::Pool::new(2);
+
+    let result = receive_single(
+        &mut tmp_reader,
+        &queue_tx,
+        &client_cons,
+        &test_handler,
+        None,
+        &mut head_buf,
+        &obj_pool,
+    )
+    .await;
+
+    assert_eq!(true, result);
+
+    let connection_queue = client_cons.get_clone(id);
+    assert_eq!(true, connection_queue.is_some());
 }

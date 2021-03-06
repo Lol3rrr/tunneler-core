@@ -70,6 +70,17 @@ impl Client {
     /// * id: The ID of the new user connection
     /// * con: The new user connection
     pub fn new_con(&self, user_id: u32, con: tokio::net::TcpStream) {
+        // Notify the client of the new connection
+        if let Err(e) = self.client_send_queue.send(Message::new(
+            MessageHeader::new(user_id, MessageType::Connect, 0),
+            vec![],
+        )) {
+            error!(
+                "[{}][{}] Sending Connect message: {:?}",
+                self.id, user_id, e
+            );
+        }
+
         let (read_con, write_con) = con.into_split();
         let (tx, rx) = mpsc::stream();
         self.user_cons.set(user_id, tx);
