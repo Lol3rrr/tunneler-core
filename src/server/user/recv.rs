@@ -49,16 +49,13 @@ pub async fn recv<F, C>(
                 let msg = Message::new(header, buf);
 
                 // Puts the message in the queue to be send to the client
-                match send_queue.send(msg) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        error!(
-                            "[{}][{}] Forwarding message to client: {}",
-                            client_id, user_id, e
-                        );
-                        break;
-                    }
-                };
+                if let Err(e) = send_queue.send(msg) {
+                    error!(
+                        "[{}][{}] Forwarding message to client: {}",
+                        client_id, user_id, e
+                    );
+                    break;
+                }
             }
             Err(e) => {
                 error!("[{}][{}] Reading from User-Con: {}", client_id, user_id, e);
