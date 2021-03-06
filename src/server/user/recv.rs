@@ -56,6 +56,10 @@ pub async fn recv<F, C>(
                     );
                     break;
                 }
+
+                if n == 0 {
+                    break;
+                }
             }
             Err(e) => {
                 error!("[{}][{}] Reading from User-Con: {}", client_id, user_id, e);
