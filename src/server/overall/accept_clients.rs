@@ -22,8 +22,8 @@ pub async fn accept_clients(
             }
         };
 
-        if !validate_connection::validate_connection(&mut client_socket, &key).await {
-            error!("Rejected Client");
+        if let Err(e) = validate_connection::validate_connection(&mut client_socket, &key).await {
+            error!("Validating Client: {:?}", e);
             continue;
         }
 

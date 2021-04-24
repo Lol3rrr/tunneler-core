@@ -35,13 +35,10 @@ impl ClientManager {
         let client_count = self.client_count.load(std::sync::atomic::Ordering::SeqCst);
 
         let index = raw_index % client_count;
-        match clients_data.get(index as usize) {
-            Some(c) => {
-                self.index.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                Some(c.clone())
-            }
-            None => None,
-        }
+        let client = clients_data.get(index as usize)?;
+        self.index
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        Some(client.clone())
     }
 
     /// Adds a new client connection to the List of connections

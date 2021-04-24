@@ -117,17 +117,12 @@ impl Client {
 
         let mut header_buffer = [0; 13];
         loop {
-            if tokio_rx::receive(
-                id,
-                &mut read_con,
-                &user_cons,
-                &client_manager,
-                &obj_pool,
-                &mut header_buffer,
-            )
-            .await
-            .is_err()
+            if let Err(e) =
+                tokio_rx::receive(id, &mut read_con, &user_cons, &obj_pool, &mut header_buffer)
+                    .await
             {
+                log::error!("[{}] Receiving Client-Message: {:?}", id, e);
+                client_manager.remove(id);
                 return;
             }
         }
@@ -149,10 +144,9 @@ impl Client {
     ) {
         let mut h_data = [0; 13];
         loop {
-            if tokio_tx::send(id, &mut write_con, &mut queue, &client_manager, &mut h_data)
-                .await
-                .is_err()
-            {
+            if let Err(e) = tokio_tx::send(&mut write_con, &mut queue, &mut h_data).await {
+                log::error!("[{}] Sending Client-Message: {:?}", id, e);
+                client_manager.remove(id);
                 return;
             }
         }

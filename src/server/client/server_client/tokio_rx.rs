@@ -2,7 +2,6 @@ use crate::connections::Connections;
 use crate::general::ConnectionReader;
 use crate::message::{Message, MessageHeader, MessageType};
 use crate::objectpool::Pool;
-use crate::server::client::ClientManager;
 use crate::streams::mpsc;
 
 use log::error;
@@ -10,31 +9,34 @@ use log::error;
 #[cfg(test)]
 use crate::general::mocks::MockReader;
 
-/// Receive Messages from the Client-Connection
+#[derive(Debug)]
+pub enum ReceiveError {
+    ReadingCon(std::io::Error),
+    ParsingHeader([u8; 13]),
+}
+
+impl From<std::io::Error> for ReceiveError {
+    fn from(other: std::io::Error) -> Self {
+        Self::ReadingCon(other)
+    }
+}
+
+/// Receives a single Message from the Client-Connection
 pub async fn receive<C>(
     id: u32,
     read_con: &mut C,
     user_cons: &Connections<mpsc::StreamWriter<Message>>,
-    client_manager: &std::sync::Arc<ClientManager>,
     obj_pool: &Pool<Vec<u8>>,
     header_buf: &mut [u8; 13],
-) -> Result<(), ()>
+) -> Result<(), ReceiveError>
 where
     C: ConnectionReader + Send,
 {
-    let header = match read_con.read_full(header_buf).await {
-        Ok(_) => match MessageHeader::deserialize(header_buf) {
-            Some(h) => h,
-            None => {
-                error!("[{}] Deserializing Header: {:?}", id, header_buf);
-                return Ok(());
-            }
-        },
-        Err(e) => {
-            error!("[{}] Reading from Client-Connection: {}", id, e);
-            client_manager.remove(id);
-            return Err(());
-        }
+    read_con.read_full(header_buf).await?;
+
+    let header = match MessageHeader::deserialize(header_buf) {
+        Some(h) => h,
+        None => return Err(ReceiveError::ParsingHeader(header_buf.clone())),
     };
 
     match header.get_kind() {
@@ -90,7 +92,6 @@ async fn data_message() {
     let user_id = 15;
     let mut mock_con = MockReader::new();
     let user_cons = Connections::new();
-    let client_manager = std::sync::Arc::new(ClientManager::new());
     let obj_pool = Pool::new(10);
     let mut header_buf = [0u8; 13];
 
@@ -104,15 +105,7 @@ async fn data_message() {
     let (client_tx, mut client_rx) = mpsc::stream();
     user_cons.set(user_id, client_tx);
 
-    let recv_result = receive(
-        id,
-        &mut mock_con,
-        &user_cons,
-        &client_manager,
-        &obj_pool,
-        &mut header_buf,
-    )
-    .await;
+    let recv_result = receive(id, &mut mock_con, &user_cons, &obj_pool, &mut header_buf).await;
 
     assert_eq!(true, recv_result.is_ok());
     assert_eq!(
