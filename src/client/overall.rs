@@ -16,6 +16,7 @@ mod tx;
 /// all the interactions with the Server
 pub struct Client {
     server_destination: Destination,
+    external_port: u16,
     key: Vec<u8>,
 }
 
@@ -23,9 +24,10 @@ impl Client {
     /// Creates the raw Client instance that is configured to
     /// connect to the given Server Destination and authenticate
     /// using the provided Key
-    pub fn new(server: Destination, key: Vec<u8>) -> Self {
+    pub fn new(server: Destination, external_port: u16, key: Vec<u8>) -> Self {
         Self {
             server_destination: server,
+            external_port,
             key,
         }
     }
@@ -90,6 +92,7 @@ impl Client {
             let connection = match establish_connection::establish_connection(
                 &self.server_destination.get_full_address(),
                 &self.key,
+                self.external_port,
             )
             .await
             {

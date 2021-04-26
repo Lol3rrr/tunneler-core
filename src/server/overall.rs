@@ -1,17 +1,26 @@
+use crate::server::client::Client;
 use crate::server::client::ClientManager;
 
-use tokio::net::TcpListener;
-
 use log::{error, info};
+use rand::Rng;
+use std::collections::BTreeMap;
+use std::sync::Arc;
+use tokio::net::TcpListener;
+use validate_connection::validate_connection;
 
-mod accept_clients;
+mod forwarder;
+mod ports;
+mod validate_connection;
+
+use forwarder::Forwarder;
+pub use ports::Strategy;
 
 /// Holds all information needed to creating and running
 /// a single Tunneler-Server
 #[derive(Debug, PartialEq)]
 pub struct Server {
     listen_port: u32,
-    public_port: u32,
+    port_strategy: Strategy,
     key: Vec<u8>,
 }
 
@@ -19,13 +28,13 @@ impl Server {
     /// Creates a new Server-Instance from the given Data
     ///
     /// Params:
-    /// * public_port: The Port on which user-requests should be accepted on
     /// * listen_port: The Port clients will connect to
+    /// * port_strategy: The Strategy to determine if a port a client wants to use is valid
     /// * key: The Key/Password clients need to connect to the server
-    pub fn new(public_port: u32, listen_port: u32, key: Vec<u8>) -> Self {
+    pub fn new(listen_port: u32, port_strategy: Strategy, key: Vec<u8>) -> Self {
         Self {
-            public_port,
             listen_port,
+            port_strategy,
             key,
         }
     }
@@ -37,44 +46,67 @@ impl Server {
         info!("Starting...");
 
         let listen_bind_addr = format!("0.0.0.0:{}", self.listen_port);
-        let listen_listener = TcpListener::bind(&listen_bind_addr).await.unwrap();
-
-        let req_bind_addr = format!("0.0.0.0:{}", self.public_port);
-        let req_listener = TcpListener::bind(&req_bind_addr).await.unwrap();
-
-        let clients = std::sync::Arc::new(ClientManager::new());
+        let client_listener = TcpListener::bind(&listen_bind_addr).await.unwrap();
 
         info!("Listening for Clients on: {}", listen_bind_addr);
-        info!("Listening for User on: {}", req_bind_addr);
 
-        // Task to async accept new clients
-        tokio::task::spawn(accept_clients::accept_clients(
-            listen_listener,
-            self.key,
-            clients.clone(),
-        ));
+        let mut ports: BTreeMap<u16, Arc<ClientManager>> = BTreeMap::new();
 
-        let mut id: u32 = 0;
-
-        // Accepting User-Requests
+        // Accept new Clients
         loop {
-            let socket = match req_listener.accept().await {
-                Ok((raw_socket, _)) => raw_socket,
+            // Get Client
+            let mut client_socket = match client_listener.accept().await {
+                Ok((socket, _)) => socket,
                 Err(e) => {
-                    error!("Accepting Req-Connection: {}", e);
+                    error!("Accepting client-connection: {}", e);
                     continue;
                 }
             };
 
-            let client = clients.get();
-            if client.is_none() {
-                error!("Could not obtain a Client-Connection");
-                continue;
-            }
+            let port = match validate_connection(&mut client_socket, &self.key, |port| {
+                self.port_strategy.contains_port(port)
+            })
+            .await
+            {
+                Ok(p) => p,
+                Err(e) => {
+                    error!("Validating Client-Connection: {:?}", e);
+                    continue;
+                }
+            };
 
-            id = id.wrapping_add(1);
+            let clients = match ports.get(&port) {
+                Some(c) => c.clone(),
+                None => {
+                    // Create new Client-List for the Port and start a Forwarder for
+                    // the Port as well
+                    let tmp = Arc::new(ClientManager::new());
+                    tokio::task::spawn(Forwarder::new(port, tmp.clone()).start());
 
-            client.unwrap().new_con(id, socket);
+                    ports.insert(port, tmp.clone());
+                    tmp
+                }
+            };
+
+            let c_id: u32 = rand::thread_rng().gen();
+
+            info!("Accepted client: {}", c_id);
+
+            let (rx, tx) = client_socket.into_split();
+
+            let (queue_tx, queue_rx) = tokio::sync::mpsc::unbounded_channel();
+
+            let client = Client::new(c_id, clients.clone(), queue_tx);
+
+            tokio::task::spawn(Client::sender(c_id, tx, queue_rx, clients.clone()));
+            tokio::task::spawn(Client::receiver(
+                c_id,
+                rx,
+                client.get_user_cons(),
+                clients.clone(),
+            ));
+
+            clients.add(client);
         }
     }
 }
@@ -83,10 +115,10 @@ impl Server {
 fn new_server() {
     assert_eq!(
         Server {
-            public_port: 80,
             listen_port: 8080,
+            port_strategy: Strategy::Single(12),
             key: vec![2, 3, 1],
         },
-        Server::new(80, 8080, vec![2, 3, 1])
+        Server::new(8080, Strategy::Single(12), vec![2, 3, 1])
     );
 }

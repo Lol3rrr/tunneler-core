@@ -1,6 +1,6 @@
 [package]
 name = "tunneler-core"
-version = "0.8.1"
+version = "0.9.0"
 authors = ["lol3rrr <s.loler03@gmail.com>"]
 edition = "2018"
 license = "MIT"
@@ -20,7 +20,7 @@ rand = { version = "0.7.0", features = ["getrandom", "small_rng"] }
 dashmap = { version = "4.0.2" }
 rsa = { version = "0.3.0" }
 base64 = { version = "0.13.0" }
-tokio = { version = "1.1.1", features = ["rt", "rt-multi-thread", "net", "io-util", "sync", "time", "macros"] }
+tokio = { version = "1.5", features = ["rt", "rt-multi-thread", "net", "io-util", "sync", "time", "macros"] }
 fnv = { version = "1.0.7" }
 crossbeam-queue = "0.3"
 async-trait = "0.1.42"

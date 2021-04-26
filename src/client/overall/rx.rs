@@ -58,7 +58,7 @@ where
             // Setup the send channel for requests for this user
             let (tx, handle_rx) = mpsc::stream();
             // Add the Connection to the current map of user-connection
-            client_cons.set(id, tx.clone());
+            client_cons.set(id, tx);
             let handle_tx = queues::Sender::new(id, send_queue.clone(), client_cons.clone());
             tokio::task::spawn(start_handler(id, handle_rx, handle_tx, handler_data));
 

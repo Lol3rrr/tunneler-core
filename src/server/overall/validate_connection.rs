@@ -15,6 +15,8 @@ pub enum ValidateError {
     Decrypting(rsa::errors::Error),
     MismatchedKeys,
     SendingAcknowledge(std::io::Error),
+    MalformedPort,
+    InvalidPort,
 }
 
 // The validation flow is like this
@@ -25,10 +27,18 @@ pub enum ValidateError {
 // 4. Server decrypts the message and checks if the password/key is valid
 // 5a. If valid: Server sends an Acknowledge message and its done
 // 5b. If invalid: Server closes the connection
-pub async fn validate_connection(
+// 6. Client sends the Port-Packet
+// 7. Server validates the given Port
+// 7a. Valid: Sends ACK-Message back
+// 7b. Invalid: Closes the Connection
+pub async fn validate_connection<V>(
     con: &mut tokio::net::TcpStream,
     key: &[u8],
-) -> Result<(), ValidateError> {
+    is_port_valid: V,
+) -> Result<u16, ValidateError>
+where
+    V: FnOnce(u16) -> bool,
+{
     // Step 2
     let mut rng = OsRng;
     let priv_key = RSAPrivateKey::new(&mut rng, 2048).expect("Failed to generate private key");
@@ -91,12 +101,47 @@ pub async fn validate_connection(
     let ack_header = MessageHeader::new(0, MessageType::Acknowledge, 0);
     let mut ack_data = [0; 13];
     ack_header.serialize(&mut ack_data);
-    match con.write_all(&ack_data).await {
-        Ok(_) => {}
-        Err(e) => {
+    if let Err(e) = con.write_all(&ack_data).await {
+        return Err(ValidateError::SendingAcknowledge(e));
+    }
+
+    // Step 6
+    let header = match con.read_exact(&mut head_buf).await {
+        Ok(_) => match MessageHeader::deserialize(&head_buf) {
+            Some(h) => h,
+            None => return Err(ValidateError::DeserializeMessage),
+        },
+        Err(e) => return Err(ValidateError::ReceivingMessage(e)),
+    };
+    if *header.get_kind() != MessageType::Port {
+        return Err(ValidateError::WrongResponseType);
+    }
+
+    let port_length = header.get_length() as usize;
+    if port_length != 2 {
+        return Err(ValidateError::MalformedPort);
+    }
+
+    let mut recv_port: [u8; 2] = [0, 0];
+    if let Err(e) = con.read_exact(&mut recv_port).await {
+        return Err(ValidateError::ReceivingMessage(e));
+    }
+
+    let port = u16::from_be_bytes(recv_port);
+
+    //  Step 7
+    if is_port_valid(port) {
+        // Step 7a
+        let ack_header = MessageHeader::new(0, MessageType::Acknowledge, 0);
+        let mut ack_data = [0; 13];
+        ack_header.serialize(&mut ack_data);
+        if let Err(e) = con.write_all(&ack_data).await {
             return Err(ValidateError::SendingAcknowledge(e));
         }
-    };
+    } else {
+        // Step  7b
+        return Err(ValidateError::InvalidPort);
+    }
 
-    Ok(())
+    Ok(port)
 }

@@ -36,7 +36,7 @@ where
 
     let header = match MessageHeader::deserialize(header_buf) {
         Some(h) => h,
-        None => return Err(ReceiveError::ParsingHeader(header_buf.clone())),
+        None => return Err(ReceiveError::ParsingHeader(*header_buf)),
     };
 
     match header.get_kind() {
