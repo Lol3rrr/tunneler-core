@@ -1,35 +1,36 @@
-use crate::general::{ConnectionReader, ConnectionWriter};
-use crate::message::{Message, MessageHeader, MessageType};
+use crate::{
+    general::{ConnectionReader, ConnectionWriter},
+    handshake::HandshakeError,
+    message::{Message, MessageHeader, MessageType},
+};
 
-use log::error;
 use rsa::{BigUint, PaddingScheme, PublicKey, RSAPublicKey};
 
-pub async fn perform<C>(connection: &mut C, key: &[u8], port: u16) -> bool
+pub async fn perform<C>(connection: &mut C, key: &[u8], port: u16) -> Result<(), HandshakeError>
 where
     C: ConnectionWriter + ConnectionReader + Send,
 {
     // Step 2 - Receive
     let mut head_buf = [0; 13];
     let header = match connection.read_full(&mut head_buf).await {
-        Ok(_) => {
-            let msg = MessageHeader::deserialize(&head_buf);
-            msg.as_ref().unwrap();
-            msg.unwrap()
-        }
+        Ok(_) => match MessageHeader::deserialize(&head_buf) {
+            Some(m) => m,
+            None => {
+                return Err(HandshakeError::DeserializeMessage);
+            }
+        },
         Err(e) => {
-            error!("Reading Message-Header: {}", e);
-            return false;
+            return Err(HandshakeError::ReceivingMessage(e));
         }
     };
     if *header.get_kind() != MessageType::Key {
-        return false;
+        return Err(HandshakeError::WrongResponseType);
     }
 
     let key_length = header.get_length() as usize;
     let mut key_buf = vec![0; key_length];
     if let Err(e) = connection.read_full(&mut key_buf).await {
-        error!("Reading Public-Key from Server: {}", e);
-        return false;
+        return Err(HandshakeError::ReceivingKey(e));
     }
 
     let e_bytes = key_buf.split_off(256);
@@ -50,8 +51,7 @@ where
 
     let mut h_data = [0; 13];
     if let Err(e) = connection.write_msg(&msg, &mut h_data).await {
-        error!("Sending Encrypted Key/Password: {}", e);
-        return false;
+        return Err(HandshakeError::SendingKey(e));
     }
 
     let mut buf = [0; 13];
@@ -59,25 +59,23 @@ where
         Ok(_) => match MessageHeader::deserialize(&buf) {
             Some(c) => c,
             None => {
-                return false;
+                return Err(HandshakeError::DeserializeMessage);
             }
         },
         Err(e) => {
-            error!("Reading response: {}", e);
-            return false;
+            return Err(HandshakeError::ReceivingMessage(e));
         }
     };
 
     if *header.get_kind() != MessageType::Acknowledge {
-        return false;
+        return Err(HandshakeError::WrongResponseType);
     }
 
     let port_msg_header = MessageHeader::new(0, MessageType::Port, 2);
     let port_msg = Message::new(port_msg_header, port.to_be_bytes().to_vec());
 
     if let Err(e) = connection.write_msg(&port_msg, &mut h_data).await {
-        error!("Sending desired Port: {}", e);
-        return false;
+        return Err(HandshakeError::SendingMessage(e));
     }
 
     let mut buf = [0; 13];
@@ -85,20 +83,19 @@ where
         Ok(_) => match MessageHeader::deserialize(&buf) {
             Some(c) => c,
             None => {
-                return false;
+                return Err(HandshakeError::DeserializeMessage);
             }
         },
         Err(e) => {
-            error!("Reading response: {}", e);
-            return false;
+            return Err(HandshakeError::ReceivingMessage(e));
         }
     };
 
     if *header.get_kind() != MessageType::Acknowledge {
-        return false;
+        return Err(HandshakeError::WrongResponseType);
     }
 
-    true
+    Ok(())
 }
 
 #[cfg(test)]

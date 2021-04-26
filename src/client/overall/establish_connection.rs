@@ -1,5 +1,3 @@
-use log::error;
-
 use crate::handshake;
 
 /// Params:
@@ -14,12 +12,13 @@ pub async fn establish_connection(
     let mut connection = match tokio::net::TcpStream::connect(&adr).await {
         Ok(c) => c,
         Err(e) => {
-            error!("Establishing-Connection: {}", e);
+            log::error!("Establishing-Connection: {}", e);
             return None;
         }
     };
 
-    if !handshake::client::perform(&mut connection, key, port).await {
+    if let Err(e) = handshake::client::perform(&mut connection, key, port).await {
+        log::error!("Performing Handshake: {:?}", e);
         return None;
     }
 
