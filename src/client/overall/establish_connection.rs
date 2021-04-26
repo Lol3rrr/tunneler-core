@@ -1,6 +1,6 @@
 use log::error;
 
-mod handshake;
+use crate::handshake;
 
 /// Params:
 /// * adr: The Address to connect to
@@ -19,7 +19,7 @@ pub async fn establish_connection(
         }
     };
 
-    if !handshake::perform(&mut connection, key, port).await {
+    if !handshake::client::perform(&mut connection, key, port).await {
         return None;
     }
 

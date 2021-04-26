@@ -1,3 +1,4 @@
+use crate::handshake;
 use crate::server::client::Client;
 use crate::server::client::ClientManager;
 
@@ -6,11 +7,9 @@ use rand::Rng;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use validate_connection::validate_connection;
 
 mod forwarder;
 mod ports;
-mod validate_connection;
 
 use forwarder::Forwarder;
 pub use ports::Strategy;
@@ -63,7 +62,7 @@ impl Server {
                 }
             };
 
-            let port = match validate_connection(&mut client_socket, &self.key, |port| {
+            let port = match handshake::server::perform(&mut client_socket, &self.key, |port| {
                 self.port_strategy.contains_port(port)
             })
             .await
