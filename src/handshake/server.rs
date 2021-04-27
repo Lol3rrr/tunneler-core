@@ -26,7 +26,10 @@ where
 {
     // Step 2
     let mut rng = OsRng;
-    let priv_key = RSAPrivateKey::new(&mut rng, 2048).expect("Failed to generate private key");
+    let priv_key = match RSAPrivateKey::new(&mut rng, 2048) {
+        Ok(k) => k,
+        Err(e) => return Err(HandshakeError::GeneratingKey(e)),
+    };
     let pub_key = RSAPublicKey::from(&priv_key);
 
     let pub_n_bytes = pub_key.n().to_bytes_le();
@@ -50,9 +53,7 @@ where
             Some(m) => m,
             None => return Err(HandshakeError::DeserializeMessage),
         },
-        Err(e) => {
-            return Err(HandshakeError::ReceivingMessage(e));
-        }
+        Err(e) => return Err(HandshakeError::ReceivingMessage(e)),
     };
     if *header.get_kind() != MessageType::Verify {
         return Err(HandshakeError::WrongResponseType);
@@ -66,9 +67,7 @@ where
 
     let recv_key = match priv_key.decrypt(PaddingScheme::PKCS1v15Encrypt, &recv_encrypted_key) {
         Ok(raw_key) => raw_key,
-        Err(e) => {
-            return Err(HandshakeError::Decrypting(e));
-        }
+        Err(e) => return Err(HandshakeError::Decrypting(e)),
     };
 
     // Step 5

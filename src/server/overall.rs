@@ -45,7 +45,13 @@ impl Server {
         info!("Starting...");
 
         let listen_bind_addr = format!("0.0.0.0:{}", self.listen_port);
-        let client_listener = TcpListener::bind(&listen_bind_addr).await.unwrap();
+        let client_listener = match TcpListener::bind(&listen_bind_addr).await {
+            Ok(l) => l,
+            Err(e) => {
+                log::error!("Binding to Address('{}'): {:?}", listen_bind_addr, e);
+                panic!();
+            }
+        };
 
         info!("Listening for Clients on: {}", listen_bind_addr);
 

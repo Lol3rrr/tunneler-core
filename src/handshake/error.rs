@@ -14,6 +14,12 @@ pub enum HandshakeError {
     DeserializeMessage,
     /// Received the wrong message
     WrongResponseType,
+    /// The encryption Key could not be generated
+    GeneratingKey(rsa::errors::Error),
+    /// The received Key could not be parsed
+    ParseKey(rsa::errors::Error),
+    /// There was an error while encrypting the password/key
+    Encrypting(rsa::errors::Error),
     /// There was an error while decrypting the password/key
     /// send by the Client
     Decrypting(rsa::errors::Error),

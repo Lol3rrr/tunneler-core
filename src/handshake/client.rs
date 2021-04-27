@@ -15,13 +15,9 @@ where
     let header = match connection.read_full(&mut head_buf).await {
         Ok(_) => match MessageHeader::deserialize(&head_buf) {
             Some(m) => m,
-            None => {
-                return Err(HandshakeError::DeserializeMessage);
-            }
+            None => return Err(HandshakeError::DeserializeMessage),
         },
-        Err(e) => {
-            return Err(HandshakeError::ReceivingMessage(e));
-        }
+        Err(e) => return Err(HandshakeError::ReceivingMessage(e)),
     };
     if *header.get_kind() != MessageType::Key {
         return Err(HandshakeError::WrongResponseType);
@@ -36,15 +32,19 @@ where
     let e_bytes = key_buf.split_off(256);
     let n_bytes = key_buf;
 
-    let pub_key = RSAPublicKey::new(
+    let pub_key = match RSAPublicKey::new(
         BigUint::from_bytes_le(&n_bytes),
         BigUint::from_bytes_le(&e_bytes),
-    )
-    .expect("Could not create Public-Key");
+    ) {
+        Ok(k) => k,
+        Err(e) => return Err(HandshakeError::ParseKey(e)),
+    };
 
-    let encrypted_key = pub_key
-        .encrypt(&mut rand::rngs::OsRng, PaddingScheme::PKCS1v15Encrypt, key)
-        .expect("Could not encrypt Key");
+    let encrypted_key =
+        match pub_key.encrypt(&mut rand::rngs::OsRng, PaddingScheme::PKCS1v15Encrypt, key) {
+            Ok(k) => k,
+            Err(e) => return Err(HandshakeError::Encrypting(e)),
+        };
 
     let msg_header = MessageHeader::new(0, MessageType::Verify, encrypted_key.len() as u64);
     let msg = Message::new(msg_header, encrypted_key);
@@ -58,13 +58,9 @@ where
     let header = match connection.read_full(&mut buf).await {
         Ok(_) => match MessageHeader::deserialize(&buf) {
             Some(c) => c,
-            None => {
-                return Err(HandshakeError::DeserializeMessage);
-            }
+            None => return Err(HandshakeError::DeserializeMessage),
         },
-        Err(e) => {
-            return Err(HandshakeError::ReceivingMessage(e));
-        }
+        Err(e) => return Err(HandshakeError::ReceivingMessage(e)),
     };
 
     if *header.get_kind() != MessageType::Acknowledge {
@@ -82,13 +78,9 @@ where
     let header = match connection.read_full(&mut buf).await {
         Ok(_) => match MessageHeader::deserialize(&buf) {
             Some(c) => c,
-            None => {
-                return Err(HandshakeError::DeserializeMessage);
-            }
+            None => return Err(HandshakeError::DeserializeMessage),
         },
-        Err(e) => {
-            return Err(HandshakeError::ReceivingMessage(e));
-        }
+        Err(e) => return Err(HandshakeError::ReceivingMessage(e)),
     };
 
     if *header.get_kind() != MessageType::Acknowledge {
@@ -148,7 +140,10 @@ mod tests {
         let key_password = "test".as_bytes();
         let port = 13;
 
-        perform(&mut connection, key_password, port).await;
+        assert_eq!(
+            true,
+            perform(&mut connection, key_password, port).await.is_ok()
+        );
 
         let chunks = connection.writer_mut().chunks();
         assert_eq!(4, chunks.len());
