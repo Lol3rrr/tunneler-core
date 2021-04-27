@@ -41,20 +41,25 @@ impl Destination {
     }
 }
 
-#[test]
-fn new_dest_ip() {
-    let dest = Destination::new("localhost".to_owned(), 123);
-    assert_eq!("localhost", dest.get_ip());
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-#[test]
-fn new_dest_port() {
-    let dest = Destination::new("localhost".to_owned(), 123);
-    assert_eq!(123, dest.get_port());
-}
+    #[test]
+    fn new_dest_ip() {
+        let dest = Destination::new("localhost".to_owned(), 123);
+        assert_eq!("localhost", dest.get_ip());
+    }
 
-#[test]
-fn new_dest_formatted() {
-    let dest = Destination::new("localhost".to_owned(), 123);
-    assert_eq!("localhost:123", dest.get_full_address());
+    #[test]
+    fn new_dest_port() {
+        let dest = Destination::new("localhost".to_owned(), 123);
+        assert_eq!(123, dest.get_port());
+    }
+
+    #[test]
+    fn new_dest_formatted() {
+        let dest = Destination::new("localhost".to_owned(), 123);
+        assert_eq!("localhost:123", dest.get_full_address());
+    }
 }

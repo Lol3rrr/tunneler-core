@@ -93,46 +93,51 @@ impl ClientManager {
     }
 }
 
-#[test]
-fn new_empty_manager() {
-    let manager = ClientManager::new();
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    assert_eq!(0, manager.client_count());
-}
+    #[test]
+    fn new_empty_manager() {
+        let manager = ClientManager::new();
 
-#[test]
-fn add_client() {
-    let manager = std::sync::Arc::new(ClientManager::new());
-    assert_eq!(0, manager.client_count());
+        assert_eq!(0, manager.client_count());
+    }
 
-    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-    manager.add(Client::new(123, manager.clone(), tx));
-    assert_eq!(1, manager.client_count());
-}
+    #[test]
+    fn add_client() {
+        let manager = std::sync::Arc::new(ClientManager::new());
+        assert_eq!(0, manager.client_count());
 
-#[test]
-fn add_remove_client() {
-    let manager = std::sync::Arc::new(ClientManager::new());
-    assert_eq!(0, manager.client_count());
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        manager.add(Client::new(123, manager.clone(), tx));
+        assert_eq!(1, manager.client_count());
+    }
 
-    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-    manager.add(Client::new(123, manager.clone(), tx));
-    assert_eq!(1, manager.client_count());
+    #[test]
+    fn add_remove_client() {
+        let manager = std::sync::Arc::new(ClientManager::new());
+        assert_eq!(0, manager.client_count());
 
-    manager.remove(123);
-    assert_eq!(0, manager.client_count());
-}
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        manager.add(Client::new(123, manager.clone(), tx));
+        assert_eq!(1, manager.client_count());
 
-#[test]
-fn get_client() {
-    let manager = std::sync::Arc::new(ClientManager::new());
-    assert_eq!(0, manager.client_count());
+        manager.remove(123);
+        assert_eq!(0, manager.client_count());
+    }
 
-    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-    manager.add(Client::new(123, manager.clone(), tx.clone()));
-    assert_eq!(1, manager.client_count());
+    #[test]
+    fn get_client() {
+        let manager = std::sync::Arc::new(ClientManager::new());
+        assert_eq!(0, manager.client_count());
 
-    let tmp_client = manager.get();
-    assert_eq!(true, tmp_client.is_some());
-    assert_eq!(123, tmp_client.unwrap().get_id());
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        manager.add(Client::new(123, manager.clone(), tx.clone()));
+        assert_eq!(1, manager.client_count());
+
+        let tmp_client = manager.get();
+        assert_eq!(true, tmp_client.is_some());
+        assert_eq!(123, tmp_client.unwrap().get_id());
+    }
 }

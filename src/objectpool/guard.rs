@@ -70,38 +70,43 @@ where
     }
 }
 
-#[test]
-fn return_on_drop() {
-    let queue = std::sync::Arc::new(ArrayQueue::new(1));
-    let guard = Guard::new(5, queue.clone());
-    drop(guard);
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    assert_eq!(1, queue.len());
-    assert_eq!(Some(5), queue.pop());
-}
+    #[test]
+    fn return_on_drop() {
+        let queue = std::sync::Arc::new(ArrayQueue::new(1));
+        let guard = Guard::new(5, queue.clone());
+        drop(guard);
 
-#[test]
-fn deref_value_drop() {
-    let queue = std::sync::Arc::new(ArrayQueue::new(1));
-    let guard = Guard::new(5, queue.clone());
-    assert_eq!(5, *guard);
+        assert_eq!(1, queue.len());
+        assert_eq!(Some(5), queue.pop());
+    }
 
-    drop(guard);
+    #[test]
+    fn deref_value_drop() {
+        let queue = std::sync::Arc::new(ArrayQueue::new(1));
+        let guard = Guard::new(5, queue.clone());
+        assert_eq!(5, *guard);
 
-    assert_eq!(1, queue.len());
-    assert_eq!(Some(5), queue.pop());
-}
+        drop(guard);
 
-#[test]
-fn mut_deref_value_drop() {
-    let queue = std::sync::Arc::new(ArrayQueue::new(1));
-    let mut guard = Guard::new(5, queue.clone());
-    assert_eq!(5, *guard);
-    *guard = 3;
-    assert_eq!(3, *guard);
+        assert_eq!(1, queue.len());
+        assert_eq!(Some(5), queue.pop());
+    }
 
-    drop(guard);
+    #[test]
+    fn mut_deref_value_drop() {
+        let queue = std::sync::Arc::new(ArrayQueue::new(1));
+        let mut guard = Guard::new(5, queue.clone());
+        assert_eq!(5, *guard);
+        *guard = 3;
+        assert_eq!(3, *guard);
 
-    assert_eq!(1, queue.len());
-    assert_eq!(Some(3), queue.pop());
+        drop(guard);
+
+        assert_eq!(1, queue.len());
+        assert_eq!(Some(3), queue.pop());
+    }
 }

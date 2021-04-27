@@ -57,6 +57,13 @@ impl Client {
         }
     }
 
+    fn calc_wait_time(attempt: u32) -> Option<std::time::Duration> {
+        let raw_time = std::time::Duration::from_secs(2u64.pow(attempt));
+        raw_time.checked_add(std::time::Duration::from_millis(
+            rand::rngs::ThreadRng::default().next_u64() % 1000,
+        ))
+    }
+
     /// This starts the client and all the needed tasks
     ///
     /// This function essentially never returns and should
@@ -81,7 +88,6 @@ impl Client {
         info!("Starting...");
 
         let mut attempts = 0;
-        let wait_base: u64 = 2;
 
         loop {
             info!(
@@ -99,17 +105,13 @@ impl Client {
                 Some(c) => c,
                 None => {
                     attempts += 1;
-                    let raw_time = std::time::Duration::from_secs(wait_base.pow(attempts));
-                    let final_wait_time = raw_time
-                        .checked_add(std::time::Duration::from_millis(
-                            rand::rngs::ThreadRng::default().next_u64() % 1000,
-                        ))
-                        .unwrap();
-                    info!(
-                        "Waiting {:?} before trying to connect again",
-                        final_wait_time
-                    );
-                    tokio::time::sleep(final_wait_time).await;
+                    match Self::calc_wait_time(attempts) {
+                        Some(wait_time) => {
+                            info!("Waiting {:?} before trying to connect again", wait_time);
+                            tokio::time::sleep(wait_time).await;
+                        }
+                        None => {}
+                    };
 
                     continue;
                 }
@@ -149,17 +151,22 @@ impl Client {
     }
 }
 
-#[tokio::test]
-async fn heartbeat() {
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    Client::heartbeat(&tx).await;
+    #[tokio::test]
+    async fn heartbeat() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
-    assert_eq!(
-        Some(Message::new(
-            MessageHeader::new(0, MessageType::Heartbeat, 0),
-            vec![]
-        )),
-        rx.recv().await
-    );
+        Client::heartbeat(&tx).await;
+
+        assert_eq!(
+            Some(Message::new(
+                MessageHeader::new(0, MessageType::Heartbeat, 0),
+                vec![]
+            )),
+            rx.recv().await
+        );
+    }
 }

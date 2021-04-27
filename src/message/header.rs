@@ -70,43 +70,48 @@ impl MessageHeader {
     }
 }
 
-#[test]
-fn message_header_serialize_connect() {
-    let input = vec![13, 0, 0, 0, 1, 20, 0, 0, 0, 0, 0, 0, 0];
-    let mut output = [0; 13];
-    MessageHeader {
-        id: 13,
-        kind: MessageType::Connect,
-        length: 20,
-    }
-    .serialize(&mut output);
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    assert_eq!(&input[0..13], &output[0..13],);
-}
-
-#[test]
-fn message_header_deserialize_connect() {
-    let mut input = [0; 13];
-    input[0] = 13;
-    input[4] = 1;
-    input[5] = 20;
-    assert_eq!(
-        Some(MessageHeader {
+    #[test]
+    fn message_header_serialize_connect() {
+        let input = vec![13, 0, 0, 0, 1, 20, 0, 0, 0, 0, 0, 0, 0];
+        let mut output = [0; 13];
+        MessageHeader {
             id: 13,
             kind: MessageType::Connect,
             length: 20,
-        }),
-        MessageHeader::deserialize(&input)
-    );
-}
+        }
+        .serialize(&mut output);
 
-#[test]
-fn serialize_deserialize() {
-    let first = MessageHeader::new(123, MessageType::Data, 123);
-    let mut serialized = [0; 13];
-    first.serialize(&mut serialized);
-    let deserialized = MessageHeader::deserialize(&serialized);
+        assert_eq!(&input[0..13], &output[0..13],);
+    }
 
-    assert_eq!(true, deserialized.is_some());
-    assert_eq!(first, deserialized.unwrap());
+    #[test]
+    fn message_header_deserialize_connect() {
+        let mut input = [0; 13];
+        input[0] = 13;
+        input[4] = 1;
+        input[5] = 20;
+        assert_eq!(
+            Some(MessageHeader {
+                id: 13,
+                kind: MessageType::Connect,
+                length: 20,
+            }),
+            MessageHeader::deserialize(&input)
+        );
+    }
+
+    #[test]
+    fn serialize_deserialize() {
+        let first = MessageHeader::new(123, MessageType::Data, 123);
+        let mut serialized = [0; 13];
+        first.serialize(&mut serialized);
+        let deserialized = MessageHeader::deserialize(&serialized);
+
+        assert_eq!(true, deserialized.is_some());
+        assert_eq!(first, deserialized.unwrap());
+    }
 }

@@ -86,33 +86,38 @@ where
     Ok(())
 }
 
-#[tokio::test]
-async fn data_message() {
-    let id = 13;
-    let user_id = 15;
-    let mut mock_con = MockReader::new();
-    let user_cons = Connections::new();
-    let obj_pool = Pool::new(10);
-    let mut header_buf = [0u8; 13];
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    // Adding the test Message to the Connection
-    mock_con.add_message(Message::new(
-        MessageHeader::new(user_id, MessageType::Data, 10),
-        vec![7; 10],
-    ));
+    #[tokio::test]
+    async fn data_message() {
+        let id = 13;
+        let user_id = 15;
+        let mut mock_con = MockReader::new();
+        let user_cons = Connections::new();
+        let obj_pool = Pool::new(10);
+        let mut header_buf = [0u8; 13];
 
-    // Adding the Connection to the connections
-    let (client_tx, mut client_rx) = mpsc::stream();
-    user_cons.set(user_id, client_tx);
-
-    let recv_result = receive(id, &mut mock_con, &user_cons, &obj_pool, &mut header_buf).await;
-
-    assert_eq!(true, recv_result.is_ok());
-    assert_eq!(
-        Ok(Message::new(
+        // Adding the test Message to the Connection
+        mock_con.add_message(Message::new(
             MessageHeader::new(user_id, MessageType::Data, 10),
-            vec![7; 10]
-        )),
-        client_rx.recv().await
-    );
+            vec![7; 10],
+        ));
+
+        // Adding the Connection to the connections
+        let (client_tx, mut client_rx) = mpsc::stream();
+        user_cons.set(user_id, client_tx);
+
+        let recv_result = receive(id, &mut mock_con, &user_cons, &obj_pool, &mut header_buf).await;
+
+        assert_eq!(true, recv_result.is_ok());
+        assert_eq!(
+            Ok(Message::new(
+                MessageHeader::new(user_id, MessageType::Data, 10),
+                vec![7; 10]
+            )),
+            client_rx.recv().await
+        );
+    }
 }

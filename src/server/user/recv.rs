@@ -3,9 +3,6 @@ use crate::message::{Message, MessageHeader, MessageType};
 
 use log::error;
 
-#[cfg(test)]
-use crate::general::mocks::MockReader;
-
 const BUFFER_SIZE: usize = 4096;
 
 /// Reads from a new User-Connection and sends it to the client
@@ -72,43 +69,49 @@ pub async fn recv<F, C>(
     close_user.await;
 }
 
-#[tokio::test]
-async fn valid_read() {
-    let mut reader = MockReader::new();
-    reader.add_bytes(&vec![0, 1, 2, 3, 4, 5, 6]);
-    reader.close();
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::general::mocks::MockReader;
 
-    let called = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    async fn close_con(tmp: std::sync::Arc<std::sync::atomic::AtomicBool>) {
-        tmp.store(true, std::sync::atomic::Ordering::SeqCst);
+    #[tokio::test]
+    async fn valid_read() {
+        let mut reader = MockReader::new();
+        reader.add_bytes(&vec![0, 1, 2, 3, 4, 5, 6]);
+        reader.close();
+
+        let called = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        async fn close_con(tmp: std::sync::Arc<std::sync::atomic::AtomicBool>) {
+            tmp.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+
+        let (queue_tx, mut queue_rx) = tokio::sync::mpsc::unbounded_channel();
+
+        let client_id = 12;
+        let user_id = 5;
+        recv(
+            client_id,
+            user_id,
+            reader,
+            queue_tx,
+            close_con(called.clone()),
+        )
+        .await;
+
+        assert_eq!(
+            Some(Message::new(
+                MessageHeader::new(user_id, MessageType::Data, 7),
+                vec![0, 1, 2, 3, 4, 5, 6]
+            )),
+            queue_rx.recv().await
+        );
+        assert_eq!(
+            Some(Message::new(
+                MessageHeader::new(user_id, MessageType::EOF, 0),
+                vec![]
+            )),
+            queue_rx.recv().await
+        );
+        assert_eq!(true, called.load(std::sync::atomic::Ordering::SeqCst));
     }
-
-    let (queue_tx, mut queue_rx) = tokio::sync::mpsc::unbounded_channel();
-
-    let client_id = 12;
-    let user_id = 5;
-    recv(
-        client_id,
-        user_id,
-        reader,
-        queue_tx,
-        close_con(called.clone()),
-    )
-    .await;
-
-    assert_eq!(
-        Some(Message::new(
-            MessageHeader::new(user_id, MessageType::Data, 7),
-            vec![0, 1, 2, 3, 4, 5, 6]
-        )),
-        queue_rx.recv().await
-    );
-    assert_eq!(
-        Some(Message::new(
-            MessageHeader::new(user_id, MessageType::EOF, 0),
-            vec![]
-        )),
-        queue_rx.recv().await
-    );
-    assert_eq!(true, called.load(std::sync::atomic::Ordering::SeqCst));
 }

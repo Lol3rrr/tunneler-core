@@ -65,35 +65,40 @@ where
     }
 }
 
-#[test]
-fn try_get_not_empty() {
-    let pool: Pool<u32> = Pool::<u32>::new(5);
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let returned = pool.try_get();
-    assert_eq!(true, returned.is_some());
-    let value = returned.unwrap();
-    assert_eq!(0, *value);
+    #[test]
+    fn try_get_not_empty() {
+        let pool: Pool<u32> = Pool::<u32>::new(5);
 
-    drop(value);
-}
-#[test]
-fn try_get_empty() {
-    let pool: Pool<u32> = Pool::<u32>::new(1);
+        let returned = pool.try_get();
+        assert_eq!(true, returned.is_some());
+        let value = returned.unwrap();
+        assert_eq!(0, *value);
 
-    let first = pool.try_get().unwrap();
+        drop(value);
+    }
+    #[test]
+    fn try_get_empty() {
+        let pool: Pool<u32> = Pool::<u32>::new(1);
 
-    let returned = pool.try_get();
-    assert_eq!(false, returned.is_some());
+        let first = pool.try_get().unwrap();
 
-    drop(first);
-}
+        let returned = pool.try_get();
+        assert_eq!(false, returned.is_some());
 
-#[test]
-fn get_empty() {
-    let pool: Pool<u32> = Pool::<u32>::new(1);
+        drop(first);
+    }
 
-    let value = pool.get();
-    assert_eq!(0, *value);
+    #[test]
+    fn get_empty() {
+        let pool: Pool<u32> = Pool::<u32>::new(1);
 
-    drop(value);
+        let value = pool.get();
+        assert_eq!(0, *value);
+
+        drop(value);
+    }
 }

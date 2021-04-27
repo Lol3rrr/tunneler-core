@@ -153,12 +153,17 @@ impl Client {
     }
 }
 
-#[test]
-fn new_client() {
-    let manager_arc = std::sync::Arc::new(ClientManager::new());
-    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let client = Client::new(123, manager_arc, tx);
+    #[test]
+    fn new_client() {
+        let manager_arc = std::sync::Arc::new(ClientManager::new());
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
 
-    assert_eq!(123, client.get_id());
+        let client = Client::new(123, manager_arc, tx);
+
+        assert_eq!(123, client.get_id());
+    }
 }

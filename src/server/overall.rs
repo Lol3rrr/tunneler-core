@@ -116,14 +116,19 @@ impl Server {
     }
 }
 
-#[test]
-fn new_server() {
-    assert_eq!(
-        Server {
-            listen_port: 8080,
-            port_strategy: Strategy::Single(12),
-            key: vec![2, 3, 1],
-        },
-        Server::new(8080, Strategy::Single(12), vec![2, 3, 1])
-    );
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_server() {
+        assert_eq!(
+            Server {
+                listen_port: 8080,
+                port_strategy: Strategy::Single(12),
+                key: vec![2, 3, 1],
+            },
+            Server::new(8080, Strategy::Single(12), vec![2, 3, 1])
+        );
+    }
 }

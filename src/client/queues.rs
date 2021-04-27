@@ -69,53 +69,58 @@ impl Drop for Sender {
     }
 }
 
-#[tokio::test]
-async fn sender_send() {
-    let clients = std::sync::Arc::new(Connections::<mpsc::StreamWriter<Message>>::new());
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let sender = Sender::new(123, tx, clients);
+    #[tokio::test]
+    async fn sender_send() {
+        let clients = std::sync::Arc::new(Connections::<mpsc::StreamWriter<Message>>::new());
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
-    sender.send(vec![0, 1], 2).await;
-    let received = rx.recv().await;
-    assert_eq!(true, received.is_some());
-    assert_eq!(
-        Message::new(MessageHeader::new(123, MessageType::Data, 2), vec![0, 1]),
-        received.unwrap(),
-    );
-}
+        let sender = Sender::new(123, tx, clients);
 
-#[tokio::test]
-async fn sender_close() {
-    let clients = std::sync::Arc::new(Connections::<mpsc::StreamWriter<Message>>::new());
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        sender.send(vec![0, 1], 2).await;
+        let received = rx.recv().await;
+        assert_eq!(true, received.is_some());
+        assert_eq!(
+            Message::new(MessageHeader::new(123, MessageType::Data, 2), vec![0, 1]),
+            received.unwrap(),
+        );
+    }
 
-    let sender = Sender::new(123, tx, clients);
-    sender.close().await;
+    #[tokio::test]
+    async fn sender_close() {
+        let clients = std::sync::Arc::new(Connections::<mpsc::StreamWriter<Message>>::new());
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
-    let received = rx.recv().await;
-    assert_eq!(true, received.is_some());
-    assert_eq!(
-        Message::new(MessageHeader::new(123, MessageType::Close, 0), vec![]),
-        received.unwrap(),
-    );
-}
+        let sender = Sender::new(123, tx, clients);
+        sender.close().await;
 
-#[tokio::test]
-async fn sender_drop() {
-    let (tx, _rx) = mpsc::stream();
-    let clients = std::sync::Arc::new(Connections::<mpsc::StreamWriter<Message>>::new());
-    clients.set(123, tx);
+        let received = rx.recv().await;
+        assert_eq!(true, received.is_some());
+        assert_eq!(
+            Message::new(MessageHeader::new(123, MessageType::Close, 0), vec![]),
+            received.unwrap(),
+        );
+    }
 
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    #[tokio::test]
+    async fn sender_drop() {
+        let (tx, _rx) = mpsc::stream();
+        let clients = std::sync::Arc::new(Connections::<mpsc::StreamWriter<Message>>::new());
+        clients.set(123, tx);
 
-    let sender = Sender::new(123, tx, clients);
-    drop(sender);
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
-    let received = rx.recv().await;
-    assert_eq!(true, received.is_some());
-    assert_eq!(
-        Message::new(MessageHeader::new(123, MessageType::Close, 0), vec![]),
-        received.unwrap(),
-    );
+        let sender = Sender::new(123, tx, clients);
+        drop(sender);
+
+        let received = rx.recv().await;
+        assert_eq!(true, received.is_some());
+        assert_eq!(
+            Message::new(MessageHeader::new(123, MessageType::Close, 0), vec![]),
+            received.unwrap(),
+        );
+    }
 }

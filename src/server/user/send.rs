@@ -4,12 +4,6 @@ use crate::streams::{error::RecvError, mpsc};
 
 use log::error;
 
-#[cfg(test)]
-use crate::{
-    general::mocks::MockWriter,
-    message::{MessageHeader, MessageType},
-};
-
 /// Returns:
 /// * `true` if everything worked fine
 /// * `false` if an error was encountered
@@ -62,22 +56,31 @@ pub async fn send<C>(
     }
 }
 
-#[tokio::test]
-async fn valid_send_single() {
-    let mut mock_writer = MockWriter::new();
-    let (queue_tx, mut queue_rx) = mpsc::stream();
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        general::mocks::MockWriter,
+        message::{MessageHeader, MessageType},
+    };
 
-    queue_tx
-        .send(Message::new(
-            MessageHeader::new(10, MessageType::Data, 5),
-            vec![0, 1, 2, 3, 4],
-        ))
-        .unwrap();
+    #[tokio::test]
+    async fn valid_send_single() {
+        let mut mock_writer = MockWriter::new();
+        let (queue_tx, mut queue_rx) = mpsc::stream();
 
-    assert_eq!(
-        true,
-        send_single(1, 10, &mut mock_writer, &mut queue_rx).await
-    );
+        queue_tx
+            .send(Message::new(
+                MessageHeader::new(10, MessageType::Data, 5),
+                vec![0, 1, 2, 3, 4],
+            ))
+            .unwrap();
 
-    assert_eq!(vec![vec![0, 1, 2, 3, 4]], mock_writer.chunks());
+        assert_eq!(
+            true,
+            send_single(1, 10, &mut mock_writer, &mut queue_rx).await
+        );
+
+        assert_eq!(vec![vec![0, 1, 2, 3, 4]], mock_writer.chunks());
+    }
 }
