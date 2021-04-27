@@ -4,12 +4,15 @@ use crate::objectpool;
 use crate::streams::mpsc;
 use crate::{client::queues, general::ConnectionReader};
 
-#[cfg(test)]
-use crate::general::mocks;
-
 use std::future::Future;
 
 use log::{debug, error};
+
+#[derive(Debug)]
+enum ReceiveError {
+    DeserializingHeader,
+    ReceivingMessage(std::io::Error),
+}
 
 /// Returns
 /// * True if everything went alright and there are more
@@ -23,7 +26,7 @@ async fn receive_single<F, Fut, T, R>(
     handler_data: Option<T>,
     head_buf: &mut [u8; 13],
     obj_pool: &objectpool::Pool<Vec<u8>>,
-) -> bool
+) -> Result<(), ReceiveError>
 where
     F: Fn(u32, mpsc::StreamReader<Message>, queues::Sender, Option<T>) -> Fut,
     Fut: Future + Send + 'static,
@@ -34,15 +37,9 @@ where
     let header = match server_con.read_full(head_buf).await {
         Ok(_) => match MessageHeader::deserialize(&head_buf) {
             Some(s) => s,
-            None => {
-                error!("Deserializing Header: {:?}", head_buf);
-                return false;
-            }
+            None => return Err(ReceiveError::DeserializingHeader),
         },
-        Err(e) => {
-            error!("Reading Data: {}", e);
-            return false;
-        }
+        Err(e) => return Err(ReceiveError::ReceivingMessage(e)),
     };
 
     let id = header.get_id();
@@ -50,7 +47,7 @@ where
     match kind {
         MessageType::Close => {
             client_cons.remove(id);
-            return true;
+            return Ok(());
         }
         MessageType::Data | MessageType::EOF => {}
         // A new connection should be established for the given ID
@@ -64,11 +61,11 @@ where
 
             debug!("Established new Connection: {}", id);
 
-            return true;
+            return Ok(());
         }
         _ => {
             error!("Unexpected Operation: {:?}", kind);
-            return true;
+            return Ok(());
         }
     };
 
@@ -81,7 +78,7 @@ where
         Err(e) => {
             error!("Receiving Data: {}", e);
             client_cons.remove(id);
-            return true;
+            return Ok(());
         }
     };
 
@@ -90,7 +87,7 @@ where
         // In case there is no matching user-connection, create a new one
         None => {
             error!("Received Data for non-existing Connection: {}", id);
-            return true;
+            return Ok(());
         }
     };
 
@@ -98,11 +95,11 @@ where
         Ok(_) => {}
         Err(e) => {
             error!("Adding to Queue for {}: {}", id, e);
-            return true;
+            return Ok(());
         }
     };
 
-    return true;
+    Ok(())
 }
 
 /// Receives all the messages from the server
@@ -128,7 +125,7 @@ pub async fn receiver<F, Fut, T, R>(
     let obj_pool: objectpool::Pool<Vec<u8>> = objectpool::Pool::new(50);
 
     loop {
-        if !receive_single(
+        match receive_single(
             &mut server_con,
             &send_queue,
             &client_cons,
@@ -139,93 +136,102 @@ pub async fn receiver<F, Fut, T, R>(
         )
         .await
         {
-            break;
-        }
+            Ok(_) => {}
+            Err(e) => {
+                log::error!("Receiving: {:?}", e);
+                break;
+            }
+        };
     }
 }
 
 #[cfg(test)]
-async fn test_handler(
-    id: u32,
-    _reader: mpsc::StreamReader<Message>,
-    _sender: queues::Sender,
-    _data: Option<u64>,
-) {
-    println!("Started: {}", id);
-}
+mod tests {
+    use super::*;
+    use crate::general::mocks;
 
-#[tokio::test]
-async fn valid_sends_data_to_correct_handler() {
-    let id = 13;
+    async fn test_handler(
+        id: u32,
+        _reader: mpsc::StreamReader<Message>,
+        _sender: queues::Sender,
+        _data: Option<u64>,
+    ) {
+        println!("Started: {}", id);
+    }
 
-    let mut tmp_reader = mocks::MockReader::new();
-    tmp_reader.add_message(Message::new(
-        MessageHeader::new(id, MessageType::Data, 10),
-        vec![3; 10],
-    ));
+    #[tokio::test]
+    async fn valid_sends_data_to_correct_handler() {
+        let id = 13;
 
-    let (queue_tx, _) = tokio::sync::mpsc::unbounded_channel();
-
-    let client_cons = std::sync::Arc::new(Connections::<mpsc::StreamWriter<Message>>::new());
-
-    let (client_tx, mut client_rx) = mpsc::stream();
-    client_cons.set(id, client_tx);
-
-    let mut head_buf = [0; 13];
-    let obj_pool = objectpool::Pool::new(2);
-
-    let result = receive_single(
-        &mut tmp_reader,
-        &queue_tx,
-        &client_cons,
-        &test_handler,
-        None,
-        &mut head_buf,
-        &obj_pool,
-    )
-    .await;
-
-    assert_eq!(true, result);
-
-    assert_eq!(
-        Ok(Message::new(
+        let mut tmp_reader = mocks::MockReader::new();
+        tmp_reader.add_message(Message::new(
             MessageHeader::new(id, MessageType::Data, 10),
             vec![3; 10],
-        )),
-        client_rx.recv().await
-    );
-}
+        ));
 
-#[tokio::test]
-async fn valid_establish_connection() {
-    let id = 13;
+        let (queue_tx, _) = tokio::sync::mpsc::unbounded_channel();
 
-    let mut tmp_reader = mocks::MockReader::new();
-    tmp_reader.add_message(Message::new(
-        MessageHeader::new(id, MessageType::Connect, 0),
-        vec![],
-    ));
+        let client_cons = std::sync::Arc::new(Connections::<mpsc::StreamWriter<Message>>::new());
 
-    let (queue_tx, _) = tokio::sync::mpsc::unbounded_channel();
+        let (client_tx, mut client_rx) = mpsc::stream();
+        client_cons.set(id, client_tx);
 
-    let client_cons = std::sync::Arc::new(Connections::<mpsc::StreamWriter<Message>>::new());
+        let mut head_buf = [0; 13];
+        let obj_pool = objectpool::Pool::new(2);
 
-    let mut head_buf = [0; 13];
-    let obj_pool = objectpool::Pool::new(2);
+        let result = receive_single(
+            &mut tmp_reader,
+            &queue_tx,
+            &client_cons,
+            &test_handler,
+            None,
+            &mut head_buf,
+            &obj_pool,
+        )
+        .await;
 
-    let result = receive_single(
-        &mut tmp_reader,
-        &queue_tx,
-        &client_cons,
-        &test_handler,
-        None,
-        &mut head_buf,
-        &obj_pool,
-    )
-    .await;
+        assert_eq!(true, result.is_ok());
 
-    assert_eq!(true, result);
+        assert_eq!(
+            Ok(Message::new(
+                MessageHeader::new(id, MessageType::Data, 10),
+                vec![3; 10],
+            )),
+            client_rx.recv().await
+        );
+    }
 
-    let connection_queue = client_cons.get_clone(id);
-    assert_eq!(true, connection_queue.is_some());
+    #[tokio::test]
+    async fn valid_establish_connection() {
+        let id = 13;
+
+        let mut tmp_reader = mocks::MockReader::new();
+        tmp_reader.add_message(Message::new(
+            MessageHeader::new(id, MessageType::Connect, 0),
+            vec![],
+        ));
+
+        let (queue_tx, _) = tokio::sync::mpsc::unbounded_channel();
+
+        let client_cons = std::sync::Arc::new(Connections::<mpsc::StreamWriter<Message>>::new());
+
+        let mut head_buf = [0; 13];
+        let obj_pool = objectpool::Pool::new(2);
+
+        let result = receive_single(
+            &mut tmp_reader,
+            &queue_tx,
+            &client_cons,
+            &test_handler,
+            None,
+            &mut head_buf,
+            &obj_pool,
+        )
+        .await;
+
+        assert_eq!(true, result.is_ok());
+
+        let connection_queue = client_cons.get_clone(id);
+        assert_eq!(true, connection_queue.is_some());
+    }
 }

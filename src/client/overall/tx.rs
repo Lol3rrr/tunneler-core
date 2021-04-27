@@ -1,34 +1,29 @@
 use crate::{general::ConnectionWriter, message::Message};
 
-use log::{debug, error};
-
-#[cfg(test)]
-use crate::general::mocks;
-#[cfg(test)]
-use crate::message::{MessageHeader, MessageType};
+#[derive(Debug)]
+enum SendError {
+    ReceivingMessage,
+    Sending(std::io::Error),
+}
 
 async fn send_single<C>(
     con: &mut C,
     queue: &mut tokio::sync::mpsc::UnboundedReceiver<Message>,
     head_buf: &mut [u8; 13],
-) -> bool
+) -> Result<(), SendError>
 where
     C: ConnectionWriter + Send,
 {
     let msg = match queue.recv().await {
         Some(m) => m,
-        None => {
-            debug!("All Queue-Senders have been closed");
-            return false;
-        }
+        None => return Err(SendError::ReceivingMessage),
     };
 
     if let Err(e) = con.write_msg(&msg, head_buf).await {
-        error!("Sending Message: {}", e);
-        return false;
+        return Err(SendError::Sending(e));
     }
 
-    true
+    Ok(())
 }
 
 /// Sends all the messages to the server
@@ -38,33 +33,46 @@ pub async fn sender(
 ) {
     let mut h_data = [0; 13];
     loop {
-        if !send_single(&mut server_con, &mut queue, &mut h_data).await {
-            return;
+        match send_single(&mut server_con, &mut queue, &mut h_data).await {
+            Ok(_) => {}
+            Err(e) => {
+                log::error!("Sending-Single: {:?}", e);
+                return;
+            }
         }
     }
 }
 
-#[tokio::test]
-async fn valid_send_single() {
-    let mut mock_connection = mocks::MockWriter::new();
-    let (queue_tx, mut queue_rx) = tokio::sync::mpsc::unbounded_channel();
-    let mut head_buf = [0; 13];
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::general::mocks;
+    use crate::message::{MessageHeader, MessageType};
 
-    let id = 12;
-    queue_tx
-        .send(Message::new(
-            MessageHeader::new(id, MessageType::Data, 5),
-            vec![2; 5],
-        ))
-        .unwrap();
+    #[tokio::test]
+    async fn valid_send_single() {
+        let mut mock_connection = mocks::MockWriter::new();
+        let (queue_tx, mut queue_rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut head_buf = [0; 13];
 
-    assert_eq!(
-        true,
-        send_single(&mut mock_connection, &mut queue_rx, &mut head_buf).await
-    );
+        let id = 12;
+        queue_tx
+            .send(Message::new(
+                MessageHeader::new(id, MessageType::Data, 5),
+                vec![2; 5],
+            ))
+            .unwrap();
 
-    assert_eq!(
-        &vec![vec![12, 0, 0, 0, 3, 5, 0, 0, 0, 0, 0, 0, 0], vec![2; 5]],
-        mock_connection.chunks()
-    );
+        assert_eq!(
+            true,
+            send_single(&mut mock_connection, &mut queue_rx, &mut head_buf)
+                .await
+                .is_ok()
+        );
+
+        assert_eq!(
+            &vec![vec![12, 0, 0, 0, 3, 5, 0, 0, 0, 0, 0, 0, 0], vec![2; 5]],
+            mock_connection.chunks()
+        );
+    }
 }

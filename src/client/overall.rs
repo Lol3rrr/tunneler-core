@@ -124,13 +124,19 @@ impl Client {
             let (queue_tx, queue_rx) = tokio::sync::mpsc::unbounded_channel();
             let outgoing = std::sync::Arc::new(Connections::<mpsc::StreamWriter<Message>>::new());
 
-            tokio::task::spawn(tx::sender(write_con, queue_rx));
-
+            // The Heartbeat loop used to keep the Connection open and verify that it
+            // is still working
             tokio::task::spawn(Self::heartbeat_loop(
                 queue_tx.clone(),
                 std::time::Duration::from_secs(15),
             ));
 
+            // Runs the Sender in the Background
+            // This task is responsible for sending out all the Queued up Messages
+            tokio::task::spawn(tx::sender(write_con, queue_rx));
+
+            // This task is responsible for receiving all the Messages by the Server
+            // and adds them to the fitting Queue
             rx::receiver(
                 read_con,
                 queue_tx.clone(),
