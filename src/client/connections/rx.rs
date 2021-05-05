@@ -18,7 +18,7 @@ enum ReceiveError {
 /// * True if everything went alright and there are more
 /// to come
 /// * False if there was an error and it should be stopped
-async fn receive_single<F, Fut, T, R>(
+async fn receive_single<F, Fut, T, R, H>(
     server_con: &mut R,
     send_queue: &tokio::sync::mpsc::UnboundedSender<Message>,
     client_cons: &std::sync::Arc<Connections<mpsc::StreamWriter<Message>>>,
