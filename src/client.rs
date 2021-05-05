@@ -166,16 +166,13 @@ impl Client {
                 }
                 Err(_) => {
                     attempts += 1;
-                    match Self::exponential_backoff(
+                    if let Some(wait_time) = Self::exponential_backoff(
                         attempts,
                         Some(std::time::Duration::from_secs(60)),
                     ) {
-                        Some(wait_time) => {
-                            info!("Waiting {:?} before trying to connect again", wait_time);
-                            tokio::time::sleep(wait_time).await;
-                        }
-                        None => {}
-                    };
+                        info!("Waiting {:?} before trying to connect again", wait_time);
+                        tokio::time::sleep(wait_time).await;
+                    }
                 }
             };
         }
