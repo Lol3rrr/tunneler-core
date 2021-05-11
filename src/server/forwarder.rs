@@ -9,6 +9,8 @@ use tokio::net::TcpListener;
 pub struct Forwarder {
     /// The External Port where users connect to
     user_port: u16,
+    /// The Listener of the Forwarder
+    listener: TcpListener,
     /// All the Clients that want to receive connections from this
     /// instance
     clients: Arc<ClientManager>,
@@ -16,34 +18,34 @@ pub struct Forwarder {
 
 impl Forwarder {
     /// Creates a new Forwarder
-    pub fn new(port: u16, clients: Arc<ClientManager>) -> Self {
-        Self {
+    ///
+    /// # Params:
+    /// * 'port': The Public facing User-Port
+    /// * 'clients': The List of Clients for this Port/Forwarder
+    pub async fn new(port: u16, clients: Arc<ClientManager>) -> Result<Self, std::io::Error> {
+        let bind_addr = format!("0.0.0.0:{}", port);
+        let listener = TcpListener::bind(&bind_addr).await?;
+
+        Ok(Self {
             user_port: port,
+            listener,
             clients,
-        }
+        })
     }
 
     /// Actually starts the Forwarder
-    pub async fn start(self) {
-        let req_bind_addr = format!("0.0.0.0:{}", self.user_port);
-        let req_listener = match TcpListener::bind(&req_bind_addr).await {
-            Ok(r) => r,
-            Err(e) => {
-                log::error!("Binding Forwarder: {:?}", e);
-                return;
-            }
-        };
-
-        log::info!("Listening for Users on: {}", req_bind_addr);
+    /// This will never return
+    pub async fn start(self) -> ! {
+        log::info!("Listening for Users on Port: {}", self.user_port);
 
         let mut id: u32 = 0;
 
         // Accepting User-Requests
         loop {
-            let socket = match req_listener.accept().await {
+            let socket = match self.listener.accept().await {
                 Ok((raw_socket, _)) => raw_socket,
                 Err(e) => {
-                    log::error!("Accepting Req-Connection: {}", e);
+                    log::error!("[{}] Accepting Req-Connection: {}", self.user_port, e);
                     continue;
                 }
             };
@@ -51,7 +53,7 @@ impl Forwarder {
             let client = match self.clients.get() {
                 Some(c) => c,
                 None => {
-                    log::error!("Could not obtain a Client-Connection");
+                    log::error!("[{}] Could not obtain a Client-Connection", self.user_port);
                     continue;
                 }
             };

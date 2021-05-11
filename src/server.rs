@@ -1,6 +1,4 @@
 use crate::handshake;
-use crate::server::client::Client;
-use crate::server::client::ClientManager;
 
 use log::{error, info};
 use rand::Rng;
@@ -8,8 +6,11 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
+mod client;
+use client::{Client, ClientManager};
 mod forwarder;
 mod ports;
+mod user;
 
 use forwarder::Forwarder;
 pub use ports::Strategy;
@@ -86,7 +87,14 @@ impl Server {
                     // Create new Client-List for the Port and start a Forwarder for
                     // the Port as well
                     let tmp = Arc::new(ClientManager::new());
-                    tokio::task::spawn(Forwarder::new(port, tmp.clone()).start());
+                    let fwd = match Forwarder::new(port, tmp.clone()).await {
+                        Ok(f) => f,
+                        Err(e) => {
+                            log::error!("Binding Forwader: {:?}", e);
+                            continue;
+                        }
+                    };
+                    tokio::task::spawn(fwd.start());
 
                     ports.insert(port, tmp.clone());
                     tmp
