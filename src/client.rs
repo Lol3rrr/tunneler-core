@@ -8,7 +8,7 @@ mod traits;
 pub use traits::*;
 
 /// Contains all the Streams/Queues used by the client
-mod queues;
+pub mod queues;
 
 use rand::RngCore;
 use std::future::Future;
