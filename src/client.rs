@@ -1,6 +1,8 @@
 use crate::{
     connections::{Connections, Destination},
+    general::Metrics,
     message::{Message, MessageHeader, MessageType},
+    metrics,
     streams::mpsc,
 };
 
@@ -11,7 +13,7 @@ mod queues;
 pub use queues::Sender as QueueSender;
 
 use rand::RngCore;
-use std::future::Future;
+use std::{future::Future, sync::Arc};
 
 use log::info;
 
@@ -19,21 +21,47 @@ mod connections;
 
 /// The Client instance in general that is responsible for handling
 /// all the interactions with the Server
-pub struct Client {
+pub struct Client<M> {
     server_destination: Destination,
     external_port: u16,
     key: Vec<u8>,
+    metrics: Arc<M>,
 }
 
-impl Client {
-    /// Creates the raw Client instance that is configured to
+impl Client<metrics::Empty> {
+    /// Creates a new Client instance that is configured to
     /// connect to the given Server Destination and authenticate
-    /// using the provided Key
+    /// using the provided Key.
+    ///
+    /// This uses an empty Metrics-Collector meaning that no metrics
+    /// will be collected
     pub fn new(server: Destination, external_port: u16, key: Vec<u8>) -> Self {
         Self {
             server_destination: server,
             external_port,
             key,
+            metrics: Arc::new(metrics::Empty::new()),
+        }
+    }
+}
+
+impl<M> Client<M>
+where
+    M: Metrics + Send + Sync + 'static,
+{
+    /// Behaves the same as the `new` implementation with the difference being
+    /// that you can specify and provide your own Metrics-Collector.
+    pub fn new_metrics(
+        server: Destination,
+        external_port: u16,
+        key: Vec<u8>,
+        metrics_collector: M,
+    ) -> Self {
+        Self {
+            server_destination: server,
+            external_port,
+            key,
+            metrics: Arc::new(metrics_collector),
         }
     }
 
@@ -63,14 +91,8 @@ impl Client {
         ))?;
 
         match max_time {
-            Some(max) => {
-                if calced_result > max {
-                    Some(max)
-                } else {
-                    Some(calced_result)
-                }
-            }
-            None => Some(calced_result),
+            Some(max) if calced_result > max => Some(max),
+            _ => Some(calced_result),
         }
     }
 
@@ -118,7 +140,11 @@ impl Client {
 
         // Runs the Sender in the Background
         // This task is responsible for sending out all the Queued up Messages
-        tokio::task::spawn(connections::tx::sender(write_con, queue_rx));
+        tokio::task::spawn(connections::tx::sender(
+            write_con,
+            queue_rx,
+            self.metrics.clone(),
+        ));
 
         // This task is responsible for receiving all the Messages by the Server
         // and adds them to the fitting Queue
@@ -128,6 +154,7 @@ impl Client {
             outgoing,
             start_handler,
             start_handler_data,
+            self.metrics.clone(),
         )
         .await;
 

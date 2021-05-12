@@ -1,10 +1,10 @@
-use crate::connections::Connections;
 use crate::message::{Message, MessageHeader, MessageType};
 use crate::objectpool;
 use crate::streams::mpsc;
 use crate::{client::queues, general::ConnectionReader};
+use crate::{connections::Connections, general::Metrics};
 
-use std::future::Future;
+use std::{future::Future, sync::Arc};
 
 use log::{debug, error};
 
@@ -15,10 +15,9 @@ enum ReceiveError {
 }
 
 /// Returns
-/// * True if everything went alright and there are more
-/// to come
+/// * True if everything went alright and there are more to come
 /// * False if there was an error and it should be stopped
-async fn receive_single<F, Fut, T, R>(
+async fn receive_single<F, Fut, T, R, M>(
     server_con: &mut R,
     send_queue: &tokio::sync::mpsc::UnboundedSender<Message>,
     client_cons: &std::sync::Arc<Connections<mpsc::StreamWriter<Message>>>,
@@ -26,6 +25,7 @@ async fn receive_single<F, Fut, T, R>(
     handler_data: Option<T>,
     head_buf: &mut [u8; 13],
     obj_pool: &objectpool::Pool<Vec<u8>>,
+    metrics: &M,
 ) -> Result<(), ReceiveError>
 where
     F: Fn(u32, mpsc::StreamReader<Message>, queues::Sender, Option<T>) -> Fut,
@@ -33,6 +33,7 @@ where
     Fut::Output: Send,
     T: Sized + Send + Clone,
     R: ConnectionReader + Sized + Send + Sync,
+    M: Metrics + Send + Sync,
 {
     let header = match server_con.read_full(head_buf).await {
         Ok(_) => match MessageHeader::deserialize(&head_buf) {
@@ -68,6 +69,9 @@ where
             return Ok(());
         }
     };
+
+    metrics.received_msg();
+    metrics.recv_bytes(header.get_length());
 
     let data_length = header.get_length() as usize;
     let mut buf = obj_pool.get();
@@ -108,18 +112,27 @@ where
 /// If there is no matching queue, it creates and starts a new client,
 /// which will then be placed into the Connection Manager for further
 /// requests
-pub async fn receiver<F, Fut, T, R>(
+///
+/// # Params:
+/// * `server_con`: The Connection to the external Server
+/// * `send_queue`: The Queue of messages that should be send to the Server
+/// * `client_cons`: A Collection of Clients that are all listening on this Connection
+/// * `start_handler`: The Function used to start a new Handler when a new Connection is received
+/// * `handler_data`: The Data that will be passed to the `start_handler` function
+pub async fn receiver<F, Fut, T, R, M>(
     mut server_con: R,
     send_queue: tokio::sync::mpsc::UnboundedSender<Message>,
     client_cons: std::sync::Arc<Connections<mpsc::StreamWriter<Message>>>,
     start_handler: &F,
     handler_data: &Option<T>,
+    metrics: Arc<M>,
 ) where
     F: Fn(u32, mpsc::StreamReader<Message>, queues::Sender, Option<T>) -> Fut,
     Fut: Future + Send + 'static,
     Fut::Output: Send,
     T: Sized + Send + Clone,
     R: ConnectionReader + Sized + Send + Sync,
+    M: Metrics + Send + Sync,
 {
     let mut head_buf = [0; 13];
     let obj_pool: objectpool::Pool<Vec<u8>> = objectpool::Pool::new(50);
@@ -133,6 +146,7 @@ pub async fn receiver<F, Fut, T, R>(
             handler_data.clone(),
             &mut head_buf,
             &obj_pool,
+            metrics.as_ref(),
         )
         .await
         {
@@ -149,6 +163,7 @@ pub async fn receiver<F, Fut, T, R>(
 mod tests {
     use super::*;
     use crate::general::mocks;
+    use crate::metrics::Empty;
 
     async fn test_handler(
         id: u32,
@@ -187,6 +202,7 @@ mod tests {
             None,
             &mut head_buf,
             &obj_pool,
+            &Empty::new(),
         )
         .await;
 
@@ -226,6 +242,7 @@ mod tests {
             None,
             &mut head_buf,
             &obj_pool,
+            &Empty::new(),
         )
         .await;
 

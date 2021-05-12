@@ -20,5 +20,8 @@ pub mod server;
 /// Provides all the Stream/Queue related functionality
 pub mod streams;
 
+/// All the Metrics related functionality
+pub mod metrics;
+
 pub(crate) mod general;
 pub(crate) mod handshake;

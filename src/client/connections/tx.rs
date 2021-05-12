@@ -1,4 +1,9 @@
-use crate::{general::ConnectionWriter, message::Message};
+use std::sync::Arc;
+
+use crate::{
+    general::{ConnectionWriter, Metrics},
+    message::Message,
+};
 
 #[derive(Debug)]
 enum SendError {
@@ -6,13 +11,15 @@ enum SendError {
     Sending(std::io::Error),
 }
 
-async fn send_single<C>(
+async fn send_single<C, M>(
     con: &mut C,
     queue: &mut tokio::sync::mpsc::UnboundedReceiver<Message>,
     head_buf: &mut [u8; 13],
+    metrics: &M,
 ) -> Result<(), SendError>
 where
     C: ConnectionWriter + Send,
+    M: Metrics + Send + Sync,
 {
     let msg = match queue.recv().await {
         Some(m) => m,
@@ -23,17 +30,23 @@ where
         return Err(SendError::Sending(e));
     }
 
+    metrics.send_msg();
+    metrics.send_bytes(msg.get_header().get_length());
+
     Ok(())
 }
 
 /// Sends all the messages to the server
-pub async fn sender(
+pub async fn sender<M>(
     mut server_con: tokio::net::tcp::OwnedWriteHalf,
     mut queue: tokio::sync::mpsc::UnboundedReceiver<Message>,
-) {
+    metrics: Arc<M>,
+) where
+    M: Metrics + Send + Sync,
+{
     let mut h_data = [0; 13];
     loop {
-        match send_single(&mut server_con, &mut queue, &mut h_data).await {
+        match send_single(&mut server_con, &mut queue, &mut h_data, metrics.as_ref()).await {
             Ok(_) => {}
             Err(e) => {
                 log::error!("Sending-Single: {:?}", e);
@@ -48,6 +61,7 @@ mod tests {
     use super::*;
     use crate::general::mocks;
     use crate::message::{MessageHeader, MessageType};
+    use crate::metrics::Empty;
 
     #[tokio::test]
     async fn valid_send_single() {
@@ -65,9 +79,14 @@ mod tests {
 
         assert_eq!(
             true,
-            send_single(&mut mock_connection, &mut queue_rx, &mut head_buf)
-                .await
-                .is_ok()
+            send_single(
+                &mut mock_connection,
+                &mut queue_rx,
+                &mut head_buf,
+                &Empty::new()
+            )
+            .await
+            .is_ok()
         );
 
         assert_eq!(
