@@ -14,17 +14,31 @@ enum ReceiveError {
     ReceivingMessage(std::io::Error),
 }
 
-/// Returns
-/// * True if everything went alright and there are more to come
-/// * False if there was an error and it should be stopped
-async fn receive_single<F, Fut, T, R, M>(
-    server_con: &mut R,
-    send_queue: &tokio::sync::mpsc::UnboundedSender<Message>,
-    client_cons: &std::sync::Arc<Connections<mpsc::StreamWriter<Message>>>,
-    start_handler: &F,
+/// All the Options needed to receive a single Message
+struct SingleOptions<'a, R, F, T> {
+    /// The Connection to the external Server
+    server_con: &'a mut R,
+    /// The Queue to send Messages to the Server
+    send_queue: &'a tokio::sync::mpsc::UnboundedSender<Message>,
+    /// A Collection of all current Connections
+    client_cons: &'a Arc<Connections<mpsc::StreamWriter<Message>>>,
+    /// The Function used to start a Handler for a new Connection
+    start_handler: &'a F,
+    /// The Data that should be passed to the Handler on startup
     handler_data: Option<T>,
-    head_buf: &mut [u8; 13],
-    obj_pool: &objectpool::Pool<Vec<u8>>,
+    /// The Buffer that should be used for Deserializing the Header
+    /// into it
+    head_buf: &'a mut [u8; 13],
+    /// The Obeject Pool that should be used
+    obj_pool: &'a objectpool::Pool<Vec<u8>>,
+}
+
+/// # Returns:
+/// * Ok(_) if everything went alright and as expected
+/// * Err(e) if any sort of Problem was encountered, more Details
+/// are then provided using the Error-Type
+async fn receive_single<F, Fut, T, R, M>(
+    opts: SingleOptions<'_, R, F, T>,
     metrics: &M,
 ) -> Result<(), ReceiveError>
 where
@@ -35,8 +49,8 @@ where
     R: ConnectionReader + Sized + Send + Sync,
     M: Metrics + Send + Sync,
 {
-    let header = match server_con.read_full(head_buf).await {
-        Ok(_) => match MessageHeader::deserialize(&head_buf) {
+    let header = match opts.server_con.read_full(opts.head_buf).await {
+        Ok(_) => match MessageHeader::deserialize(&opts.head_buf) {
             Some(s) => s,
             None => return Err(ReceiveError::DeserializingHeader),
         },
@@ -47,7 +61,7 @@ where
     let kind = header.get_kind();
     match kind {
         MessageType::Close => {
-            client_cons.remove(id);
+            opts.client_cons.remove(id);
             return Ok(());
         }
         MessageType::Data | MessageType::EOF => {}
@@ -56,9 +70,11 @@ where
             // Setup the send channel for requests for this user
             let (tx, handle_rx) = mpsc::stream();
             // Add the Connection to the current map of user-connection
-            client_cons.set(id, tx);
-            let handle_tx = queues::Sender::new(id, send_queue.clone(), client_cons.clone());
-            tokio::task::spawn(start_handler(id, handle_rx, handle_tx, handler_data));
+            opts.client_cons.set(id, tx);
+            let handle_tx =
+                queues::Sender::new(id, opts.send_queue.clone(), opts.client_cons.clone());
+            let handler = opts.start_handler;
+            tokio::task::spawn(handler(id, handle_rx, handle_tx, opts.handler_data));
 
             debug!("Established new Connection: {}", id);
 
@@ -74,19 +90,19 @@ where
     metrics.recv_bytes(header.get_length());
 
     let data_length = header.get_length() as usize;
-    let mut buf = obj_pool.get();
+    let mut buf = opts.obj_pool.get();
     buf.resize(data_length, 0);
 
-    let msg = match server_con.read_full(&mut buf).await {
+    let msg = match opts.server_con.read_full(&mut buf).await {
         Ok(_) => Message::new_guarded(header, buf),
         Err(e) => {
             error!("Receiving Data: {}", e);
-            client_cons.remove(id);
+            opts.client_cons.remove(id);
             return Ok(());
         }
     };
 
-    let con_queue = match client_cons.get_clone(id) {
+    let con_queue = match opts.client_cons.get_clone(id) {
         Some(q) => q,
         // In case there is no matching user-connection, create a new one
         None => {
@@ -138,18 +154,16 @@ pub async fn receiver<F, Fut, T, R, M>(
     let obj_pool: objectpool::Pool<Vec<u8>> = objectpool::Pool::new(50);
 
     loop {
-        match receive_single(
-            &mut server_con,
-            &send_queue,
-            &client_cons,
+        let opts = SingleOptions {
+            server_con: &mut server_con,
+            send_queue: &send_queue,
+            client_cons: &client_cons,
             start_handler,
-            handler_data.clone(),
-            &mut head_buf,
-            &obj_pool,
-            metrics.as_ref(),
-        )
-        .await
-        {
+            handler_data: handler_data.clone(),
+            head_buf: &mut head_buf,
+            obj_pool: &obj_pool,
+        };
+        match receive_single(opts, metrics.as_ref()).await {
             Ok(_) => {}
             Err(e) => {
                 log::error!("Receiving: {:?}", e);
@@ -195,13 +209,15 @@ mod tests {
         let obj_pool = objectpool::Pool::new(2);
 
         let result = receive_single(
-            &mut tmp_reader,
-            &queue_tx,
-            &client_cons,
-            &test_handler,
-            None,
-            &mut head_buf,
-            &obj_pool,
+            SingleOptions {
+                server_con: &mut tmp_reader,
+                send_queue: &queue_tx,
+                client_cons: &client_cons,
+                start_handler: &test_handler,
+                handler_data: None,
+                head_buf: &mut head_buf,
+                obj_pool: &obj_pool,
+            },
             &Empty::new(),
         )
         .await;
@@ -235,13 +251,15 @@ mod tests {
         let obj_pool = objectpool::Pool::new(2);
 
         let result = receive_single(
-            &mut tmp_reader,
-            &queue_tx,
-            &client_cons,
-            &test_handler,
-            None,
-            &mut head_buf,
-            &obj_pool,
+            SingleOptions {
+                server_con: &mut tmp_reader,
+                send_queue: &queue_tx,
+                client_cons: &client_cons,
+                start_handler: &test_handler,
+                handler_data: None,
+                head_buf: &mut head_buf,
+                obj_pool: &obj_pool,
+            },
             &Empty::new(),
         )
         .await;
