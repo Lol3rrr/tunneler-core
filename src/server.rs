@@ -6,9 +6,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
-mod client;
-use client::{Client, ClientManager};
 mod forwarder;
+use forwarder::{Client, ClientManager};
 mod ports;
 mod user;
 

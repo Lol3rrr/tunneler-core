@@ -1,4 +1,8 @@
-use crate::server::client::ClientManager;
+mod client_manager;
+pub use client_manager::ClientManager;
+
+mod client;
+pub use client::Client;
 
 use std::sync::Arc;
 use tokio::net::TcpListener;

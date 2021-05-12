@@ -1,5 +1,7 @@
 use crate::handshake;
 
+/// Establishes a new Connection to the external Server
+///
 /// Params:
 /// * adr: The Address to connect to
 /// * key: The Key used to authenticate

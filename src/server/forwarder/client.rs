@@ -1,9 +1,10 @@
-use crate::connections::Connections;
-use crate::message::{Message, MessageHeader, MessageType};
-use crate::objectpool;
-use crate::server::client::ClientManager;
-use crate::server::user;
-use crate::streams::mpsc;
+use crate::{
+    connections::Connections,
+    message::{Message, MessageHeader, MessageType},
+    objectpool,
+    server::{forwarder::ClientManager, user},
+    streams::mpsc,
+};
 
 use log::error;
 
@@ -79,11 +80,13 @@ impl Client {
                 "[{}][{}] Sending Connect message: {:?}",
                 self.id, user_id, e
             );
+            return;
         }
 
-        let (read_con, write_con) = con.into_split();
         let (tx, rx) = mpsc::stream();
         self.user_cons.set(user_id, tx);
+
+        let (read_con, write_con) = con.into_split();
 
         let client_id = self.id;
         tokio::task::spawn(user::send(client_id, user_id, write_con, rx));

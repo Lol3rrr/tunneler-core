@@ -1,4 +1,4 @@
-use crate::server::client::Client;
+use super::Client;
 
 #[derive(Debug)]
 pub struct ClientManager {

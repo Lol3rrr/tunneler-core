@@ -5,7 +5,7 @@ use crate::message::MessageType;
 /// The Header of a single Message
 #[derive(Debug, PartialEq, Clone)]
 pub struct MessageHeader {
-    /// The ID of the Connection the assosicated Message belongs to
+    /// The ID of the Connection the Message belongs to
     pub id: u32, // 4 bytes
     /// The Type of Message
     pub kind: MessageType, // 1 byte
@@ -20,15 +20,16 @@ impl MessageHeader {
     }
 
     /// Deserializes a 13-Byte array into the fitting Message-Header
+    ///
+    /// # Params:
+    /// * `raw_data`: The Byte-Slice that represents a MessageHeader
     pub fn deserialize(raw_data: &[u8; 13]) -> Option<MessageHeader> {
         let id_part = &raw_data[0..4];
         let kind_part = raw_data[4];
         let length_part = &raw_data[5..13];
 
         let id = u32::from_le_bytes(id_part.try_into().unwrap());
-        let kind = MessageType::deserialize(kind_part);
-        kind.as_ref()?;
-        let kind = kind.unwrap();
+        let kind = MessageType::deserialize(kind_part)?;
         let length = u64::from_le_bytes(length_part.try_into().unwrap());
 
         Some(MessageHeader { id, kind, length })

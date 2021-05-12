@@ -7,8 +7,8 @@ use crate::{
 mod traits;
 pub use traits::*;
 
-/// Contains all the Streams/Queues used by the client
-pub mod queues;
+mod queues;
+pub use queues::Sender as QueueSender;
 
 use rand::RngCore;
 use std::future::Future;
@@ -81,7 +81,7 @@ impl Client {
         start_handler_data: &Option<T>,
     ) -> Result<(), ()>
     where
-        F: Fn(u32, mpsc::StreamReader<Message>, queues::Sender, Option<T>) -> Fut,
+        F: Fn(u32, mpsc::StreamReader<Message>, QueueSender, Option<T>) -> Fut,
         Fut: Future + Send + 'static,
         Fut::Output: Send,
         T: Sized + Send + Clone,

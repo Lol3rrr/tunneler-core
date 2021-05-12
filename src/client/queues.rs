@@ -1,6 +1,8 @@
-use crate::connections::Connections;
-use crate::message::{Message, MessageHeader, MessageType};
-use crate::streams::mpsc;
+use crate::{
+    connections::Connections,
+    message::{Message, MessageHeader, MessageType},
+    streams::mpsc,
+};
 
 use log::{debug, error};
 
