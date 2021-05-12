@@ -33,6 +33,9 @@ struct SingleOptions<'a, R, F, T> {
     obj_pool: &'a objectpool::Pool<Vec<u8>>,
 }
 
+/// Receives a single Message from the external Server and processes
+/// it accordingly
+///
 /// # Returns:
 /// * Ok(_) if everything went alright and as expected
 /// * Err(e) if any sort of Problem was encountered, more Details
