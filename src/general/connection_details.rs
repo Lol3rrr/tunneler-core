@@ -36,4 +36,9 @@ impl Details {
 
         Ok(Details { ip })
     }
+
+    /// The IP address of the User
+    pub fn ip(&self) -> &DetailsIP {
+        &self.ip
+    }
 }

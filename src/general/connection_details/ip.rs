@@ -1,9 +1,11 @@
-/// A given IP-Address
+/// An IPV4 or IPV6 Address
+///
+/// The Address is represented in its Octets format
 #[derive(Debug, PartialEq)]
 pub enum DetailsIP {
-    /// Represents a single IPV4 Address
+    /// An IPV4 Address
     IPV4([u8; 4]),
-    /// Represents a single IPV6 Address
+    /// An IPV6 Address
     IPV6([u8; 16]),
 }
 
