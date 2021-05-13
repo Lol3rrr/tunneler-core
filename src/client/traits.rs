@@ -4,6 +4,7 @@ use crate::{
     client::QueueSender,
     message::Message,
     streams::{error::RecvError, mpsc},
+    Details,
 };
 
 use async_trait::async_trait;
@@ -51,5 +52,11 @@ pub trait Handler {
     /// This method is called every time a new Connection is received and
     /// should therefore handle all the initial stuff for dealing with
     /// the new Connection
-    async fn new_con(self: Arc<Self>, id: u32, rx: mpsc::StreamReader<Message>, tx: QueueSender);
+    async fn new_con(
+        self: Arc<Self>,
+        id: u32,
+        details: Details,
+        rx: mpsc::StreamReader<Message>,
+        tx: QueueSender,
+    );
 }

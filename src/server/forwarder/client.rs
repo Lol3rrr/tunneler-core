@@ -4,6 +4,7 @@ use crate::{
     objectpool,
     server::{forwarder::ClientManager, user},
     streams::mpsc,
+    Details, DetailsIP,
 };
 
 use log::error;
@@ -71,10 +72,23 @@ impl Client {
     /// * id: The ID of the new user connection
     /// * con: The new user connection
     pub fn new_con(&self, user_id: u32, con: tokio::net::TcpStream) {
+        let peer_addr = match con.peer_addr() {
+            Ok(a) => a,
+            Err(e) => {
+                log::error!("[{}][{}] Getting Peer-Address: {:?}", self.id, user_id, e);
+                return;
+            }
+        };
+
+        let ip_details = DetailsIP::from(peer_addr);
+        let con_details = Details::new(ip_details);
+
+        let details = con_details.serialize();
+
         // Notify the client of the new connection
         if let Err(e) = self.client_send_queue.send(Message::new(
-            MessageHeader::new(user_id, MessageType::Connect, 0),
-            vec![],
+            MessageHeader::new(user_id, MessageType::Connect, details.len() as u64),
+            details,
         )) {
             error!(
                 "[{}][{}] Sending Connect message: {:?}",

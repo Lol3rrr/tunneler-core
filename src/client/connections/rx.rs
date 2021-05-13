@@ -1,4 +1,3 @@
-use crate::objectpool;
 use crate::streams::mpsc;
 use crate::{client::queues, general::ConnectionReader};
 use crate::{
@@ -6,6 +5,7 @@ use crate::{
     message::{Message, MessageHeader, MessageType},
 };
 use crate::{connections::Connections, general::Metrics};
+use crate::{objectpool, Details};
 
 use std::sync::Arc;
 
@@ -67,6 +67,21 @@ where
         MessageType::Data | MessageType::EOF => {}
         // A new connection should be established for the given ID
         MessageType::Connect => {
+            let mut details_buf = vec![0; header.get_length() as usize];
+            let details = match opts.server_con.read_full(&mut details_buf).await {
+                Ok(_) => match Details::deserialize(&mut details_buf) {
+                    Ok(d) => d,
+                    Err(e) => {
+                        log::error!("Parsing Connection-Details: {:?}", e);
+                        return Ok(());
+                    }
+                },
+                Err(e) => {
+                    log::error!("Reading Connection-Details: {:?}", e);
+                    return Ok(());
+                }
+            };
+
             // Setup the send channel for requests for this user
             let (tx, handle_rx) = mpsc::stream();
             // Add the Connection to the current map of user-connection
@@ -74,7 +89,7 @@ where
             let handle_tx =
                 queues::Sender::new(id, opts.send_queue.clone(), opts.client_cons.clone());
 
-            tokio::task::spawn(H::new_con(handler, id, handle_rx, handle_tx));
+            tokio::task::spawn(H::new_con(handler, id, details, handle_rx, handle_tx));
 
             debug!("Established new Connection: {}", id);
 
@@ -170,9 +185,9 @@ pub async fn receiver<R, H, M>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::client::mocks as client_mocks;
     use crate::general::mocks;
     use crate::metrics::Empty;
+    use crate::{client::mocks as client_mocks, DetailsIP};
 
     #[tokio::test]
     async fn valid_sends_data_to_correct_handler() {
@@ -222,10 +237,12 @@ mod tests {
     async fn valid_establish_connection() {
         let id = 13;
 
+        let details = Details::new(DetailsIP::IPV4([0, 0, 0, 0])).serialize();
+
         let mut tmp_reader = mocks::MockReader::new();
         tmp_reader.add_message(Message::new(
-            MessageHeader::new(id, MessageType::Connect, 0),
-            vec![],
+            MessageHeader::new(id, MessageType::Connect, details.len() as u64),
+            details,
         ));
 
         let (queue_tx, _) = tokio::sync::mpsc::unbounded_channel();

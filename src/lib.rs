@@ -24,4 +24,5 @@ pub mod streams;
 pub mod metrics;
 
 pub(crate) mod general;
+pub use general::{Details, DetailsIP};
 pub(crate) mod handshake;
