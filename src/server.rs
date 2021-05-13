@@ -1,4 +1,4 @@
-use crate::handshake;
+use crate::{general::Metrics, handshake, metrics};
 
 use log::{error, info};
 use rand::Rng;
@@ -17,13 +17,14 @@ pub use ports::Strategy;
 /// Holds all information needed to creating and running
 /// a single Tunneler-Server
 #[derive(Debug, PartialEq)]
-pub struct Server {
+pub struct Server<M> {
     listen_port: u32,
     port_strategy: Strategy,
     key: Vec<u8>,
+    metrics: Arc<M>,
 }
 
-impl Server {
+impl Server<metrics::Empty> {
     /// Creates a new Server-Instance from the given Data
     ///
     /// Params:
@@ -31,10 +32,32 @@ impl Server {
     /// * port_strategy: The Strategy to determine if a port a client wants to use is valid
     /// * key: The Key/Password clients need to connect to the server
     pub fn new(listen_port: u32, port_strategy: Strategy, key: Vec<u8>) -> Self {
+        Self::new_metrics(listen_port, port_strategy, key, metrics::Empty::new())
+    }
+}
+
+impl<M> Server<M>
+where
+    M: Metrics,
+{
+    /// Creates a new Server-Instance from the given Data
+    ///
+    /// Params:
+    /// * listen_port: The Port clients will connect to
+    /// * port_strategy: The Strategy to determine if a port a client wants to use is valid
+    /// * key: The Key/Password clients need to connect to the server
+    /// * p_metrics: The Metrics-Collector to use
+    pub fn new_metrics(
+        listen_port: u32,
+        port_strategy: Strategy,
+        key: Vec<u8>,
+        p_metrics: M,
+    ) -> Self {
         Self {
             listen_port,
             port_strategy,
             key,
+            metrics: Arc::new(p_metrics),
         }
     }
 
@@ -134,6 +157,7 @@ mod tests {
                 listen_port: 8080,
                 port_strategy: Strategy::Single(12),
                 key: vec![2, 3, 1],
+                metrics: Arc::new(metrics::Empty::new()),
             },
             Server::new(8080, Strategy::Single(12), vec![2, 3, 1])
         );

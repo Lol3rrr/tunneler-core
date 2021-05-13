@@ -6,6 +6,7 @@ use crate::general::Metrics;
 /// This is mainly intended for when metrics are not desired
 /// and as it does nothing, all the metrics calls should resolve
 /// to a NOP and be removed entirely
+#[derive(Debug, PartialEq)]
 pub struct Empty;
 
 impl Empty {
