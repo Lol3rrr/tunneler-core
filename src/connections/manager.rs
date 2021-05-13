@@ -29,10 +29,7 @@ where
 
     #[inline(always)]
     pub fn get_clone(&self, id: u32) -> Option<T> {
-        match self.connections.get(&id) {
-            None => None,
-            Some(c) => Some(c.clone()),
-        }
+        self.connections.get(&id).map(|c| c.clone())
     }
 
     #[inline(always)]

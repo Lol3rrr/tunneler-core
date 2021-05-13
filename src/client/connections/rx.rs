@@ -1,10 +1,13 @@
-use crate::message::{Message, MessageHeader, MessageType};
 use crate::objectpool;
 use crate::streams::mpsc;
 use crate::{client::queues, general::ConnectionReader};
+use crate::{
+    client::Handler,
+    message::{Message, MessageHeader, MessageType},
+};
 use crate::{connections::Connections, general::Metrics};
 
-use std::{future::Future, sync::Arc};
+use std::sync::Arc;
 
 use log::{debug, error};
 
@@ -15,17 +18,13 @@ enum ReceiveError {
 }
 
 /// All the Options needed to receive a single Message
-struct SingleOptions<'a, R, F, T> {
+struct SingleOptions<'a, R> {
     /// The Connection to the external Server
     server_con: &'a mut R,
     /// The Queue to send Messages to the Server
     send_queue: &'a tokio::sync::mpsc::UnboundedSender<Message>,
     /// A Collection of all current Connections
     client_cons: &'a Arc<Connections<mpsc::StreamWriter<Message>>>,
-    /// The Function used to start a Handler for a new Connection
-    start_handler: &'a F,
-    /// The Data that should be passed to the Handler on startup
-    handler_data: Option<T>,
     /// The Buffer that should be used for Deserializing the Header
     /// into it
     head_buf: &'a mut [u8; 13],
@@ -40,16 +39,14 @@ struct SingleOptions<'a, R, F, T> {
 /// * Ok(_) if everything went alright and as expected
 /// * Err(e) if any sort of Problem was encountered, more Details
 /// are then provided using the Error-Type
-async fn receive_single<F, Fut, T, R, M>(
-    opts: SingleOptions<'_, R, F, T>,
+async fn receive_single<R, H, M>(
+    opts: SingleOptions<'_, R>,
+    handler: Arc<H>,
     metrics: &M,
 ) -> Result<(), ReceiveError>
 where
-    F: Fn(u32, mpsc::StreamReader<Message>, queues::Sender, Option<T>) -> Fut,
-    Fut: Future + Send + 'static,
-    Fut::Output: Send,
-    T: Sized + Send + Clone,
     R: ConnectionReader + Sized + Send + Sync,
+    H: Handler + Send + Sync + 'static,
     M: Metrics + Send + Sync,
 {
     let header = match opts.server_con.read_full(opts.head_buf).await {
@@ -76,8 +73,8 @@ where
             opts.client_cons.set(id, tx);
             let handle_tx =
                 queues::Sender::new(id, opts.send_queue.clone(), opts.client_cons.clone());
-            let handler = opts.start_handler;
-            tokio::task::spawn(handler(id, handle_rx, handle_tx, opts.handler_data));
+
+            tokio::task::spawn(H::new_con(handler, id, handle_rx, handle_tx));
 
             debug!("Established new Connection: {}", id);
 
@@ -138,19 +135,15 @@ where
 /// * `client_cons`: A Collection of Clients that are all listening on this Connection
 /// * `start_handler`: The Function used to start a new Handler when a new Connection is received
 /// * `handler_data`: The Data that will be passed to the `start_handler` function
-pub async fn receiver<F, Fut, T, R, M>(
+pub async fn receiver<R, H, M>(
     mut server_con: R,
     send_queue: tokio::sync::mpsc::UnboundedSender<Message>,
     client_cons: std::sync::Arc<Connections<mpsc::StreamWriter<Message>>>,
-    start_handler: &F,
-    handler_data: &Option<T>,
+    handler: Arc<H>,
     metrics: Arc<M>,
 ) where
-    F: Fn(u32, mpsc::StreamReader<Message>, queues::Sender, Option<T>) -> Fut,
-    Fut: Future + Send + 'static,
-    Fut::Output: Send,
-    T: Sized + Send + Clone,
     R: ConnectionReader + Sized + Send + Sync,
+    H: Handler + Send + Sync + 'static,
     M: Metrics + Send + Sync,
 {
     let mut head_buf = [0; 13];
@@ -161,12 +154,10 @@ pub async fn receiver<F, Fut, T, R, M>(
             server_con: &mut server_con,
             send_queue: &send_queue,
             client_cons: &client_cons,
-            start_handler,
-            handler_data: handler_data.clone(),
             head_buf: &mut head_buf,
             obj_pool: &obj_pool,
         };
-        match receive_single(opts, metrics.as_ref()).await {
+        match receive_single(opts, handler.clone(), metrics.as_ref()).await {
             Ok(_) => {}
             Err(e) => {
                 log::error!("Receiving: {:?}", e);
@@ -179,17 +170,9 @@ pub async fn receiver<F, Fut, T, R, M>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::client::mocks as client_mocks;
     use crate::general::mocks;
     use crate::metrics::Empty;
-
-    async fn test_handler(
-        id: u32,
-        _reader: mpsc::StreamReader<Message>,
-        _sender: queues::Sender,
-        _data: Option<u64>,
-    ) {
-        println!("Started: {}", id);
-    }
 
     #[tokio::test]
     async fn valid_sends_data_to_correct_handler() {
@@ -216,11 +199,10 @@ mod tests {
                 server_con: &mut tmp_reader,
                 send_queue: &queue_tx,
                 client_cons: &client_cons,
-                start_handler: &test_handler,
-                handler_data: None,
                 head_buf: &mut head_buf,
                 obj_pool: &obj_pool,
             },
+            Arc::new(client_mocks::EmptyHandler::new()),
             &Empty::new(),
         )
         .await;
@@ -258,11 +240,10 @@ mod tests {
                 server_con: &mut tmp_reader,
                 send_queue: &queue_tx,
                 client_cons: &client_cons,
-                start_handler: &test_handler,
-                handler_data: None,
                 head_buf: &mut head_buf,
                 obj_pool: &obj_pool,
             },
+            Arc::new(client_mocks::EmptyHandler::new()),
             &Empty::new(),
         )
         .await;

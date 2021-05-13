@@ -1,4 +1,7 @@
+use std::sync::Arc;
+
 use crate::{
+    client::QueueSender,
     message::Message,
     streams::{error::RecvError, mpsc},
 };
@@ -39,4 +42,14 @@ impl Sender for queues::Sender {
     async fn send_msg(&self, data: Vec<u8>, length: u64) -> bool {
         self.send(data, length).await
     }
+}
+
+/// This defines a single Handler that will receive every new Connection
+/// that is established
+#[async_trait]
+pub trait Handler {
+    /// This method is called every time a new Connection is received and
+    /// should therefore handle all the initial stuff for dealing with
+    /// the new Connection
+    async fn new_con(self: Arc<Self>, id: u32, rx: mpsc::StreamReader<Message>, tx: QueueSender);
 }

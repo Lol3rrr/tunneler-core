@@ -6,6 +6,9 @@ use crate::{
     streams::mpsc,
 };
 
+#[cfg(test)]
+pub(crate) mod mocks;
+
 mod traits;
 pub use traits::*;
 
@@ -13,7 +16,7 @@ mod queues;
 pub use queues::Sender as QueueSender;
 
 use rand::RngCore;
-use std::{future::Future, sync::Arc};
+use std::sync::Arc;
 
 use log::info;
 
@@ -97,16 +100,9 @@ where
     }
 
     /// Establishes and then also runs a new Connection
-    async fn start_con<F, Fut, T>(
-        &self,
-        start_handler: &F,
-        start_handler_data: &Option<T>,
-    ) -> Result<(), ()>
+    async fn start_con<H>(&self, handler: Arc<H>) -> Result<(), ()>
     where
-        F: Fn(u32, mpsc::StreamReader<Message>, QueueSender, Option<T>) -> Fut,
-        Fut: Future + Send + 'static,
-        Fut::Output: Send,
-        T: Sized + Send + Clone,
+        H: Handler + Send + Sync + 'static,
     {
         info!(
             "Conneting to server: {}",
@@ -152,8 +148,7 @@ where
             read_con,
             queue_tx.clone(),
             outgoing,
-            start_handler,
-            start_handler_data,
+            handler,
             self.metrics.clone(),
         )
         .await;
@@ -175,19 +170,16 @@ where
     /// The `start_handler` is only ever called once for every new connection in a
     /// seperate tokio::Task
     /// All Messages the Handler receives only Data or EOF Messages
-    pub async fn start<F, Fut, T>(self, start_handler: F, start_handler_data: Option<T>) -> !
+    pub async fn start<H>(self, handler: Arc<H>) -> !
     where
-        F: Fn(u32, mpsc::StreamReader<Message>, queues::Sender, Option<T>) -> Fut,
-        Fut: Future + Send + 'static,
-        Fut::Output: Send,
-        T: Sized + Send + Clone,
+        H: Handler + Send + Sync + 'static,
     {
         info!("Starting...");
 
         let mut attempts = 0;
 
         loop {
-            match self.start_con(&start_handler, &start_handler_data).await {
+            match self.start_con(handler.clone()).await {
                 Ok(_) => {
                     attempts = 0;
                 }

@@ -36,10 +36,7 @@ where
 
     /// Tries to return an entry
     pub fn try_get(&self) -> Option<Guard<T>> {
-        match self.objs.pop() {
-            Some(s) => Some(Guard::new(s, self.objs.clone())),
-            None => None,
-        }
+        self.objs.pop().map(|s| Guard::new(s, self.objs.clone()))
     }
 
     /// Always returns an Instance of the Pool-Datatype

@@ -1,13 +1,27 @@
-use tunneler_core::client::{Receiver, Sender};
-use tunneler_core::server::{Server, Strategy};
+use std::sync::Arc;
 
-async fn handler<R, S>(id: u32, _reader: R, sender: S, _data: Option<u64>)
-where
-    R: Receiver + Sized + Send,
-    S: Sender + Sized + Send,
-{
-    println!("Handling: {}", id);
-    sender.send_msg(vec![b't', b'e', b's', b't'], 4).await;
+use tunneler_core::server::{Server, Strategy};
+use tunneler_core::{
+    client::{self, Handler, Sender},
+    message::Message,
+    streams::mpsc,
+};
+
+use async_trait::async_trait;
+
+pub struct ExampleHandler;
+
+#[async_trait]
+impl Handler for ExampleHandler {
+    async fn new_con(
+        self: Arc<Self>,
+        id: u32,
+        _reader: mpsc::StreamReader<Message>,
+        sender: client::QueueSender,
+    ) {
+        println!("Handling: {}", id);
+        sender.send_msg(vec![b't', b'e', b's', b't'], 4).await;
+    }
 }
 
 fn main() {
@@ -27,5 +41,5 @@ fn main() {
     let destination = tunneler_core::Destination::new("localhost".to_owned(), 8081);
     let client = tunneler_core::client::Client::new(destination, 8080, key);
 
-    rt.block_on(client.start(handler, None));
+    rt.block_on(client.start(Arc::new(ExampleHandler {})));
 }
