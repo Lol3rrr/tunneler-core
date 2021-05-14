@@ -1,7 +1,7 @@
 use crate::{
     connections::{Connections, Destination},
     general::Metrics,
-    message::{Message, MessageHeader, MessageType},
+    message::Message,
     metrics,
     streams::mpsc,
 };
@@ -21,6 +21,7 @@ use std::sync::Arc;
 use log::info;
 
 mod connections;
+mod heartbeat;
 
 /// The Client instance in general that is responsible for handling
 /// all the interactions with the Server
@@ -68,21 +69,6 @@ where
         }
     }
 
-    async fn heartbeat_loop(
-        send_queue: tokio::sync::mpsc::UnboundedSender<Message>,
-        wait_time: std::time::Duration,
-    ) {
-        loop {
-            let msg_header = MessageHeader::new(0, MessageType::Heartbeat, 0);
-            let msg = Message::new(msg_header, Vec::new());
-            if let Err(e) = send_queue.send(msg) {
-                log::error!("Sending Heartbeat: {}", e);
-                return;
-            };
-            tokio::time::sleep(wait_time).await;
-        }
-    }
-
     /// Calculates the Time that should be waited before retrying
     fn exponential_backoff(
         attempt: u32,
@@ -100,6 +86,12 @@ where
     }
 
     /// Establishes and then also runs a new Connection
+    ///
+    /// # Behaviour
+    /// This starts 2 more tasks needed for the Client to work
+    /// properly and then blocks on the 3. function.
+    /// Therefore this function should only return once the
+    /// Connection is being terminated
     async fn start_con<H>(&self, handler: Arc<H>) -> Result<(), ()>
     where
         H: Handler + Send + Sync + 'static,
@@ -129,7 +121,7 @@ where
 
         // The Heartbeat loop used to keep the Connection open and verify that it
         // is still working
-        tokio::task::spawn(Self::heartbeat_loop(
+        tokio::task::spawn(heartbeat::keep_alive(
             queue_tx.clone(),
             std::time::Duration::from_secs(15),
         ));

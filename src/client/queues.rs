@@ -28,7 +28,8 @@ impl Sender {
         }
     }
 
-    /// Adds the Data to the queue to be send to the Server
+    /// Creates a new Data-Message with the given Data and Length and adds
+    /// the new Message to the Queue to be send to the external Server
     pub async fn send(&self, data: Vec<u8>, length: u64) -> bool {
         // Create the right Header and Message
         let header = MessageHeader::new(self.id, MessageType::Data, length);

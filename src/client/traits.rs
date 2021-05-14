@@ -28,7 +28,7 @@ pub trait Receiver {
 #[async_trait]
 pub trait Sender {
     /// Sends a single Message over the Connection
-    async fn send_msg(&self, data: Vec<u8>, lenth: u64) -> bool;
+    async fn send_msg(&self, data: Vec<u8>, length: u64) -> bool;
 }
 
 #[async_trait]
