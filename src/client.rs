@@ -20,8 +20,21 @@ use std::sync::Arc;
 
 use log::info;
 
+use self::connections::establish_connection::EstablishConnectionError;
+
 mod connections;
 mod heartbeat;
+
+#[derive(Debug)]
+pub(crate) enum ConnectError {
+    Establish(EstablishConnectionError),
+}
+
+impl From<EstablishConnectionError> for ConnectError {
+    fn from(other: EstablishConnectionError) -> Self {
+        Self::Establish(other)
+    }
+}
 
 /// The Client instance in general that is responsible for handling
 /// all the interactions with the Server
@@ -92,7 +105,7 @@ where
     /// properly and then blocks on the 3. function.
     /// Therefore this function should only return once the
     /// Connection is being terminated
-    async fn start_con<H>(&self, handler: Arc<H>) -> Result<(), ()>
+    async fn start_con<H>(&self, handler: Arc<H>) -> Result<(), ConnectError>
     where
         H: Handler + Send + Sync + 'static,
     {
@@ -101,18 +114,13 @@ where
             self.server_destination.get_full_address()
         );
 
-        let (read_con, write_con) = match connections::establish_connection::establish_connection(
+        let (read_con, write_con) = connections::establish_connection::establish_connection(
             self.server_destination.get_full_address(),
             &self.key,
             self.external_port,
         )
-        .await
-        {
-            Some(c) => c.into_split(),
-            None => {
-                return Err(());
-            }
-        };
+        .await?
+        .into_split();
 
         info!("Connected to server");
 
@@ -175,7 +183,9 @@ where
                 Ok(_) => {
                     attempts = 0;
                 }
-                Err(_) => {
+                Err(e) => {
+                    log::error!("Connecting: {:?}", e);
+
                     attempts += 1;
                     if let Some(wait_time) = Self::exponential_backoff(
                         attempts,

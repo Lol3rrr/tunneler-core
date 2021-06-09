@@ -40,7 +40,7 @@ fn main() {
         .build()
         .unwrap();
 
-    rt.spawn(server.start());
+    rt.spawn(server.listen());
 
     let destination = tunneler_core::Destination::new("localhost".to_owned(), 8081);
     let client = tunneler_core::client::Client::new(destination, 8080, key);

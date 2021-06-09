@@ -61,10 +61,14 @@ where
         }
     }
 
-    /// Starts the actual server itself along with all the needed tasks
+    /// Actually starts the Server and starts listening for incoming Connections from
+    /// both users and clients.
     ///
-    /// This is a blocking call and is not expected to return
-    pub async fn start(self) -> ! {
+    /// # Behaviour
+    /// This function is not expected to return as all the connections will be handled
+    /// internally or by other parts of the System, so this one can keep accepting new
+    /// ones
+    pub async fn listen(self) -> Result<(), ()> {
         info!("Starting...");
 
         let listen_bind_addr = format!("0.0.0.0:{}", self.listen_port);
@@ -72,7 +76,7 @@ where
             Ok(l) => l,
             Err(e) => {
                 log::error!("Binding to Address('{}'): {:?}", listen_bind_addr, e);
-                panic!();
+                return Err(());
             }
         };
 

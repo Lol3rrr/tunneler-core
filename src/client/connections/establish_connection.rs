@@ -1,5 +1,23 @@
 use crate::handshake;
 
+#[derive(Debug)]
+pub enum EstablishConnectionError {
+    Connection(std::io::Error),
+    Handshake(handshake::HandshakeError),
+}
+
+impl From<std::io::Error> for EstablishConnectionError {
+    fn from(other: std::io::Error) -> Self {
+        Self::Connection(other)
+    }
+}
+
+impl From<handshake::HandshakeError> for EstablishConnectionError {
+    fn from(other: handshake::HandshakeError) -> Self {
+        Self::Handshake(other)
+    }
+}
+
 /// Establishes a new Connection to the external Server
 ///
 /// Params:
@@ -10,19 +28,9 @@ pub async fn establish_connection(
     adr: &str,
     key: &[u8],
     port: u16,
-) -> Option<tokio::net::TcpStream> {
-    let mut connection = match tokio::net::TcpStream::connect(&adr).await {
-        Ok(c) => c,
-        Err(e) => {
-            log::error!("Establishing-Connection: {}", e);
-            return None;
-        }
-    };
+) -> Result<tokio::net::TcpStream, EstablishConnectionError> {
+    let mut connection = tokio::net::TcpStream::connect(&adr).await?;
+    handshake::client::perform(&mut connection, key, port).await?;
 
-    if let Err(e) = handshake::client::perform(&mut connection, key, port).await {
-        log::error!("Performing Handshake: {:?}", e);
-        return None;
-    }
-
-    Some(connection)
+    Ok(connection)
 }
