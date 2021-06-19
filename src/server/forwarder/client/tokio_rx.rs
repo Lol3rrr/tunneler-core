@@ -4,8 +4,6 @@ use crate::message::{Message, MessageHeader, MessageType};
 use crate::objectpool::Pool;
 use crate::streams::mpsc;
 
-use log::error;
-
 #[cfg(test)]
 use crate::general::mocks::MockReader;
 

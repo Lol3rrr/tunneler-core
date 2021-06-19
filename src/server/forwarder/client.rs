@@ -7,8 +7,6 @@ use crate::{
     Details, DetailsIP,
 };
 
-use log::error;
-
 mod tokio_rx;
 mod tokio_tx;
 
@@ -75,7 +73,7 @@ impl Client {
         let peer_addr = match con.peer_addr() {
             Ok(a) => a,
             Err(e) => {
-                log::error!("[{}][{}] Getting Peer-Address: {:?}", self.id, user_id, e);
+                error!("[{}][{}] Getting Peer-Address: {:?}", self.id, user_id, e);
                 return;
             }
         };
@@ -138,7 +136,7 @@ impl Client {
                 tokio_rx::receive(id, &mut read_con, &user_cons, &obj_pool, &mut header_buffer)
                     .await
             {
-                log::error!("[{}] Receiving Client-Message: {:?}", id, e);
+                error!("[{}] Receiving Client-Message: {:?}", id, e);
                 client_manager.remove(id);
                 return;
             }
@@ -162,7 +160,7 @@ impl Client {
         let mut h_data = [0; 13];
         loop {
             if let Err(e) = tokio_tx::send(&mut write_con, &mut queue, &mut h_data).await {
-                log::error!("[{}] Sending Client-Message: {:?}", id, e);
+                error!("[{}] Sending Client-Message: {:?}", id, e);
                 client_manager.remove(id);
                 return;
             }

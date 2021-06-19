@@ -19,7 +19,7 @@ pub trait ConnectionReader {
     async fn drain(&mut self, size: usize) {
         let mut buf = vec![0; size];
         if let Err(e) = self.read_full(&mut buf).await {
-            log::error!("Draining: {}", e);
+            error!("Draining: {}", e);
         }
     }
 }

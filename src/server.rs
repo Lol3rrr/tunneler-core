@@ -1,6 +1,5 @@
 use crate::{general::Metrics, handshake, metrics};
 
-use log::{error, info};
 use rand::Rng;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -75,7 +74,7 @@ where
         let client_listener = match TcpListener::bind(&listen_bind_addr).await {
             Ok(l) => l,
             Err(e) => {
-                log::error!("Binding to Address('{}'): {:?}", listen_bind_addr, e);
+                error!("Binding to Address('{}'): {:?}", listen_bind_addr, e);
                 return Err(());
             }
         };
@@ -116,7 +115,7 @@ where
                     let fwd = match Forwarder::new(port, tmp.clone()).await {
                         Ok(f) => f,
                         Err(e) => {
-                            log::error!("Binding Forwader: {:?}", e);
+                            error!("Binding Forwader: {:?}", e);
                             continue;
                         }
                     };

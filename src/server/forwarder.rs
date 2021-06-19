@@ -40,7 +40,7 @@ impl Forwarder {
     /// Actually starts the Forwarder
     /// This will never return
     pub async fn start(self) -> ! {
-        log::info!("Listening for Users on Port: {}", self.user_port);
+        info!("Listening for Users on Port: {}", self.user_port);
 
         let mut id: u32 = 0;
 
@@ -49,7 +49,7 @@ impl Forwarder {
             let socket = match self.listener.accept().await {
                 Ok((raw_socket, _)) => raw_socket,
                 Err(e) => {
-                    log::error!("[{}] Accepting Req-Connection: {}", self.user_port, e);
+                    error!("[{}] Accepting Req-Connection: {}", self.user_port, e);
                     continue;
                 }
             };
@@ -57,7 +57,7 @@ impl Forwarder {
             let client = match self.clients.get() {
                 Some(c) => c,
                 None => {
-                    log::error!("[{}] Could not obtain a Client-Connection", self.user_port);
+                    error!("[{}] Could not obtain a Client-Connection", self.user_port);
                     continue;
                 }
             };

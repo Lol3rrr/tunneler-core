@@ -9,8 +9,6 @@ use crate::{objectpool, Details};
 
 use std::sync::Arc;
 
-use log::{debug, error};
-
 #[derive(Debug)]
 enum ReceiveError {
     DeserializingHeader,
@@ -72,12 +70,12 @@ where
                 Ok(_) => match Details::deserialize(&mut details_buf) {
                     Ok(d) => d,
                     Err(e) => {
-                        log::error!("Parsing Connection-Details: {:?}", e);
+                        error!("Parsing Connection-Details: {:?}", e);
                         return Ok(());
                     }
                 },
                 Err(e) => {
-                    log::error!("Reading Connection-Details: {:?}", e);
+                    error!("Reading Connection-Details: {:?}", e);
                     return Ok(());
                 }
             };
@@ -175,7 +173,7 @@ pub async fn receiver<R, H, M>(
         match receive_single(opts, handler.clone(), metrics.as_ref()).await {
             Ok(_) => {}
             Err(e) => {
-                log::error!("Receiving: {:?}", e);
+                error!("Receiving: {:?}", e);
                 break;
             }
         };

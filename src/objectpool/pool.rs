@@ -1,7 +1,6 @@
 use crate::objectpool::Guard;
 
 use crossbeam_queue::ArrayQueue;
-use log::error;
 
 /// A Generic Pool that recovers the Data it hands out
 /// for later use again

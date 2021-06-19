@@ -49,7 +49,7 @@ pub async fn sender<M>(
         match send_single(&mut server_con, &mut queue, &mut h_data, metrics.as_ref()).await {
             Ok(_) => {}
             Err(e) => {
-                log::error!("Sending-Single: {:?}", e);
+                error!("Sending-Single: {:?}", e);
                 return;
             }
         }

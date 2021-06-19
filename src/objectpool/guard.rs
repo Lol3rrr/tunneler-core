@@ -1,5 +1,4 @@
 use crossbeam_queue::ArrayQueue;
-use log::error;
 
 /// A thin wrapper around the Data it is generic over
 /// and returns the Data it owns over the given channel

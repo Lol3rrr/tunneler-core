@@ -18,8 +18,6 @@ pub use queues::Sender as QueueSender;
 use rand::RngCore;
 use std::sync::Arc;
 
-use log::info;
-
 use self::connections::establish_connection::EstablishConnectionError;
 
 mod connections;
@@ -184,7 +182,7 @@ where
                     attempts = 0;
                 }
                 Err(e) => {
-                    log::error!("Connecting: {:?}", e);
+                    error!("Connecting: {:?}", e);
 
                     attempts += 1;
                     if let Some(wait_time) = Self::exponential_backoff(

@@ -2,8 +2,6 @@ use crate::general::ConnectionWriter;
 use crate::message::Message;
 use crate::streams::{error::RecvError, mpsc};
 
-use log::error;
-
 /// Returns:
 /// * `true` if everything worked fine
 /// * `false` if an error was encountered

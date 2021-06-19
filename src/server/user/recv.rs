@@ -1,8 +1,6 @@
 use crate::general::ConnectionReader;
 use crate::message::{Message, MessageHeader, MessageType};
 
-use log::error;
-
 const BUFFER_SIZE: usize = 4096;
 
 /// Reads from a new User-Connection and sends it to the client
