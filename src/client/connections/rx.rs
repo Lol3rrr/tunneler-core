@@ -60,6 +60,8 @@ where
     match kind {
         MessageType::Close => {
             opts.client_cons.remove(id);
+            debug!("Closing Connection: {}", id);
+
             return Ok(());
         }
         MessageType::Data | MessageType::EOF => {}
@@ -94,11 +96,12 @@ where
             return Ok(());
         }
         _ => {
-            error!("Unexpected Operation: {:?}", kind);
+            error!("Unexpected Message-Type: {:?}", kind);
             return Ok(());
         }
     };
 
+    // Handle all the metrics related stuff
     metrics.received_msg();
     metrics.recv_bytes(header.get_length());
 
@@ -117,7 +120,6 @@ where
 
     let con_queue = match opts.client_cons.get_clone(id) {
         Some(q) => q,
-        // In case there is no matching user-connection, create a new one
         None => {
             error!("Received Data for non-existing Connection: {}", id);
             return Ok(());
@@ -170,13 +172,10 @@ pub async fn receiver<R, H, M>(
             head_buf: &mut head_buf,
             obj_pool: &obj_pool,
         };
-        match receive_single(opts, handler.clone(), metrics.as_ref()).await {
-            Ok(_) => {}
-            Err(e) => {
-                error!("Receiving: {:?}", e);
-                break;
-            }
-        };
+        if let Err(e) = receive_single(opts, handler.clone(), metrics.as_ref()).await {
+            error!("Receiving: {:?}", e);
+            break;
+        }
     }
 }
 
