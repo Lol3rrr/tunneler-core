@@ -1,10 +1,6 @@
 use std::sync::Arc;
 
-use tunneler_core::{
-    client::{self, Handler, Sender},
-    message::Message,
-    streams::mpsc,
-};
+use tunneler_core::client::{Handler, Sender, UserCon};
 use tunneler_core::{
     server::{Server, Strategy},
     Details,
@@ -16,15 +12,9 @@ pub struct ExampleHandler;
 
 #[async_trait]
 impl Handler for ExampleHandler {
-    async fn new_con(
-        self: Arc<Self>,
-        id: u32,
-        _details: Details,
-        _reader: mpsc::StreamReader<Message>,
-        sender: client::QueueSender,
-    ) {
+    async fn new_con(self: Arc<Self>, id: u32, _details: Details, con: UserCon) {
         println!("Handling: {}", id);
-        sender.send_msg(vec![b't', b'e', b's', b't'], 4).await;
+        con.send_msg(vec![b't', b'e', b's', b't'], 4).await.unwrap();
     }
 }
 

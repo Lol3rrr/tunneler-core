@@ -1,20 +1,46 @@
+//! Contains some more specific Details for regarding the User-Connections
+
+use std::sync::Arc;
+
+use super::mpsc;
 use crate::{
+    client::{Receiver, Sender},
     connections::Connections,
     message::{Message, MessageHeader, MessageType},
-    streams::mpsc,
+    streams::error::RecvError,
 };
 
-/// Handles all the sending related to a single user-connection
-/// as well as the correct clean up handling once this is dropped
-pub struct Sender {
-    id: u32,
-    tx: tokio::sync::mpsc::UnboundedSender<Message>,
-    total_client_cons: std::sync::Arc<Connections<mpsc::StreamWriter<Message>>>,
+use async_trait::async_trait;
+
+/// The owned Version of the Receiver-Half of a User-Connection
+pub struct OwnedReceiver {
+    rx: mpsc::StreamReader<Message>,
 }
 
-impl Sender {
-    /// Creates a new Sender from the given Data
-    pub fn new(
+impl OwnedReceiver {
+    pub(crate) fn new(rx: mpsc::StreamReader<Message>) -> Self {
+        Self { rx }
+    }
+}
+
+#[async_trait]
+impl Receiver for OwnedReceiver {
+    type ReceivingError = RecvError;
+
+    async fn recv_msg(&mut self) -> Result<Message, Self::ReceivingError> {
+        self.rx.recv().await
+    }
+}
+
+/// The owned Version of the Sender-Halfer of a User-Connection
+pub struct OwnedSender {
+    id: u32,
+    tx: tokio::sync::mpsc::UnboundedSender<Message>,
+    all_client_cons: Arc<Connections<mpsc::StreamWriter<Message>>>,
+}
+
+impl OwnedSender {
+    pub(crate) fn new(
         id: u32,
         tx: tokio::sync::mpsc::UnboundedSender<Message>,
         cons: std::sync::Arc<Connections<mpsc::StreamWriter<Message>>>,
@@ -22,23 +48,13 @@ impl Sender {
         Self {
             id,
             tx,
-            total_client_cons: cons,
+            all_client_cons: cons,
         }
     }
 
-    /// Creates a new Data-Message with the given Data and Length and adds
-    /// the new Message to the Queue to be send to the external Server
-    pub async fn send(&self, data: Vec<u8>, length: u64) -> bool {
-        // Create the right Header and Message
-        let header = MessageHeader::new(self.id, MessageType::Data, length);
-        let msg = Message::new(header, data);
-
-        self.tx.send(msg).is_ok()
-    }
-
     /// Closes the Sender and therefore consuming itself
-    pub async fn close(self) {
-        self.total_client_cons.remove(self.id);
+    pub fn close(self) {
+        self.all_client_cons.remove(self.id);
         debug!("[Sender][{}] Removed Connection", self.id);
 
         let close_msg = Message::new(MessageHeader::new(self.id, MessageType::Close, 0), vec![]);
@@ -53,9 +69,9 @@ impl Sender {
     }
 }
 
-impl Drop for Sender {
+impl Drop for OwnedSender {
     fn drop(&mut self) {
-        match self.total_client_cons.remove(self.id) {
+        match self.all_client_cons.remove(self.id) {
             Some(_) => {}
             None => {
                 return;
@@ -70,6 +86,19 @@ impl Drop for Sender {
     }
 }
 
+#[async_trait]
+impl Sender for OwnedSender {
+    type SendingError = tokio::sync::mpsc::error::SendError<Message>;
+
+    async fn send_msg(&self, data: Vec<u8>, length: u64) -> Result<(), Self::SendingError> {
+        // Create the right Header and Message
+        let header = MessageHeader::new(self.id, MessageType::Data, length);
+        let msg = Message::new(header, data);
+
+        self.tx.send(msg)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -79,9 +108,9 @@ mod tests {
         let clients = std::sync::Arc::new(Connections::<mpsc::StreamWriter<Message>>::new());
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
-        let sender = Sender::new(123, tx, clients);
+        let sender = OwnedSender::new(123, tx, clients);
 
-        sender.send(vec![0, 1], 2).await;
+        sender.send_msg(vec![0, 1], 2).await.unwrap();
         let received = rx.recv().await;
         assert_eq!(true, received.is_some());
         assert_eq!(
@@ -95,8 +124,8 @@ mod tests {
         let clients = std::sync::Arc::new(Connections::<mpsc::StreamWriter<Message>>::new());
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
-        let sender = Sender::new(123, tx, clients);
-        sender.close().await;
+        let sender = OwnedSender::new(123, tx, clients);
+        sender.close();
 
         let received = rx.recv().await;
         assert_eq!(true, received.is_some());
@@ -114,7 +143,7 @@ mod tests {
 
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
-        let sender = Sender::new(123, tx, clients);
+        let sender = OwnedSender::new(123, tx, clients);
         drop(sender);
 
         let received = rx.recv().await;

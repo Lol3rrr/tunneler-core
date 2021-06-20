@@ -1,4 +1,10 @@
 //! This module contains all the Client-Specific logic
+//!
+//! # Client
+//! A single Client connects to a single Server-Instance to then receive
+//! User-Connections from said Server. Once a new Connection has been started
+//! the Handler of the Client will be called with the sending and receiving
+//! halfes
 
 use crate::{
     connections::{Connections, Destination},
@@ -14,9 +20,6 @@ pub(crate) mod mocks;
 mod traits;
 pub use traits::*;
 
-mod queues;
-pub use queues::Sender as QueueSender;
-
 use rand::RngCore;
 use std::sync::Arc;
 
@@ -24,6 +27,8 @@ use self::connections::establish_connection::EstablishConnectionError;
 
 mod connections;
 mod heartbeat;
+
+pub use connections::{user_con, UserCon};
 
 #[derive(Debug)]
 pub(crate) enum ConnectError {
@@ -160,12 +165,6 @@ where
     ///
     /// This function essentially never returns and should
     /// therefor be run in an independant task
-    ///
-    /// The Handler will be passed as arguments:
-    /// * The ID of the new user-connection
-    /// * A Reader where all the Messages for this user can be read from
-    /// * A Writer which can be used to send data back to the user
-    /// * The handler_data that can be used to share certain information when needed
     ///
     /// The `start_handler` is only ever called once for every new connection in a
     /// seperate tokio::Task

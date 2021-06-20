@@ -1,15 +1,10 @@
 use std::sync::Arc;
 
-use crate::{
-    client::QueueSender,
-    message::Message,
-    streams::{error::RecvError, mpsc},
-    Details,
-};
+use crate::{message::Message, Details};
 
 use async_trait::async_trait;
 
-use super::queues;
+use super::connections::UserCon;
 
 /// A Generic trait that abstracts over the actual receiving
 /// type and implementation allowing you to easily mock it
@@ -18,8 +13,12 @@ use super::queues;
 /// types
 #[async_trait]
 pub trait Receiver {
+    /// The Error-Type that the Receiver will return if it encounters
+    /// any problems
+    type ReceivingError: std::fmt::Debug;
+
     /// Receives a single Message over the Connection
-    async fn recv_msg(&mut self) -> Result<Message, RecvError>;
+    async fn recv_msg(&mut self) -> Result<Message, Self::ReceivingError>;
 }
 
 /// A Generic trait that abstract away the actual underlying
@@ -27,36 +26,20 @@ pub trait Receiver {
 /// User over that connection
 #[async_trait]
 pub trait Sender {
+    /// The Error-Type that the Sender will return if it encounters
+    /// any problems
+    type SendingError: std::fmt::Debug;
+
     /// Sends a single Message over the Connection
-    async fn send_msg(&self, data: Vec<u8>, length: u64) -> bool;
+    async fn send_msg(&self, data: Vec<u8>, length: u64) -> Result<(), Self::SendingError>;
 }
 
-#[async_trait]
-impl Receiver for mpsc::StreamReader<Message> {
-    async fn recv_msg(&mut self) -> Result<Message, RecvError> {
-        self.recv().await
-    }
-}
-
-#[async_trait]
-impl Sender for queues::Sender {
-    async fn send_msg(&self, data: Vec<u8>, length: u64) -> bool {
-        self.send(data, length).await
-    }
-}
-
-/// This defines a single Handler that will receive every new Connection
-/// that is established
+/// The Interface that every Handler needs to implement to be used by the
+/// Client.
 #[async_trait]
 pub trait Handler {
     /// This method is called every time a new Connection is received and
     /// should therefore handle all the initial stuff for dealing with
     /// the new Connection
-    async fn new_con(
-        self: Arc<Self>,
-        id: u32,
-        details: Details,
-        rx: mpsc::StreamReader<Message>,
-        tx: QueueSender,
-    );
+    async fn new_con(self: Arc<Self>, id: u32, details: Details, con: UserCon);
 }

@@ -1,13 +1,13 @@
 //! This contains all the logic needed for running the Server-Side of this
 //!
-//! ## Structure
-//! ### Server
+//! # Structure
+//! ## Server
 //! The Server itself is the overarching "Manager"/"Handler" for all how it all
 //! works together. It is therefore also responsible for accepting the Client-
 //! Connections and creating their appropriate Forwarders or adding a Client
 //! to a new Forwarder.
 //!
-//! ### Forwarder
+//! ## Forwarder
 //! A Forwarder is responsible for accepting the connections from actual
 //! Users and forwarding them to a given Client and managing their Data
 //! exchange for the entire lifetime of the connection
