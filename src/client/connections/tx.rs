@@ -43,12 +43,11 @@ pub async fn sender<M>(
 {
     let mut h_data = [0; 13];
     loop {
-        match send_single(&mut server_con, &mut queue, &mut h_data, metrics.as_ref()).await {
-            Ok(_) => {}
-            Err(e) => {
-                error!("Sending-Single: {:?}", e);
-                return;
-            }
+        if let Err(e) =
+            send_single(&mut server_con, &mut queue, &mut h_data, metrics.as_ref()).await
+        {
+            error!("Sending-Single: {:?}", e);
+            return;
         }
     }
 }
