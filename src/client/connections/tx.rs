@@ -1,9 +1,6 @@
 use std::sync::Arc;
 
-use crate::{
-    general::{ConnectionWriter, Metrics},
-    message::Message,
-};
+use crate::{general::ConnectionWriter, message::Message, metrics::Metrics};
 
 #[derive(Debug)]
 enum SendError {

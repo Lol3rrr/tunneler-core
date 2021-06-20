@@ -4,7 +4,7 @@ use crate::{
     client::Handler,
     message::{Message, MessageHeader, MessageType},
 };
-use crate::{connections::Connections, general::Metrics};
+use crate::{connections::Connections, metrics::Metrics};
 use crate::{objectpool, Details};
 
 use std::sync::Arc;
@@ -126,13 +126,10 @@ where
         }
     };
 
-    match con_queue.send(msg) {
-        Ok(_) => {}
-        Err(e) => {
-            error!("Adding to Queue for {}: {}", id, e);
-            return Ok(());
-        }
-    };
+    if let Err(e) = con_queue.send(msg) {
+        error!("Adding to Queue for {}: {}", id, e);
+        return Ok(());
+    }
 
     Ok(())
 }

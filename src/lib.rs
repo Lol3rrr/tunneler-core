@@ -5,34 +5,8 @@
 //! in a private network to be exposed through a public server
 
 #[macro_use]
-mod logging {
-    macro_rules! debug {
-        ($($arg:tt)+) => {
-            #[cfg(feature = "logging")]
-            log::debug!($($arg)+);
-            #[cfg(feature = "trace")]
-            tracing::debug!($($arg)+);
-        };
-    }
-    macro_rules! info {
-        ($($arg:tt)+) => {
-            #[cfg(feature = "logging")]
-            log::info!($($arg)+);
-            #[cfg(feature = "trace")]
-            tracing::info!($($arg)+);
-        };
-    }
-    macro_rules! error {
-        ($($arg:tt)+) => {
-            #[cfg(feature = "logging")]
-            log::error!($($arg)+);
-            #[cfg(feature = "trace")]
-            tracing::error!($($arg)+);
-        };
-    }
-}
+mod logging;
 
-/// Provides all the Client related functionality
 #[cfg(feature = "client")]
 pub mod client;
 mod connections;
@@ -42,7 +16,6 @@ pub mod message;
 /// A Generic Object-Pool that allows for easy reuse of Objects
 /// between actions
 pub(crate) mod objectpool;
-/// Provides all the Server related functionality
 #[cfg(feature = "server")]
 pub mod server;
 /// Provides all the Stream/Queue related functionality

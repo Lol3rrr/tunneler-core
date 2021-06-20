@@ -1,8 +1,10 @@
+//! This module contains all the Client-Specific logic
+
 use crate::{
     connections::{Connections, Destination},
-    general::Metrics,
     message::Message,
     metrics,
+    metrics::Metrics,
     streams::mpsc,
 };
 

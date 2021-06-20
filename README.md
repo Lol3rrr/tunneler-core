@@ -13,3 +13,5 @@ Name | Default | Description
 --- | --- | ---
 client | enabled | All the Client related code
 server | enabled | All the Server related code
+logging | enabled | Enables all the log related parts using the `log` crate
+trace | enabled | Enables all the tracing-related parts using the `tracing` and `tracing-futures` crates

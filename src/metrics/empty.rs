@@ -1,4 +1,4 @@
-use crate::general::Metrics;
+use super::Metrics;
 
 /// An empty Metrics-Collector that does not keep track
 /// of any metrics it receives and simply discards them.
@@ -22,10 +22,4 @@ impl Default for Empty {
     }
 }
 
-impl Metrics for Empty {
-    fn send_msg(&self) {}
-    fn send_bytes(&self, _send: u64) {}
-
-    fn received_msg(&self) {}
-    fn recv_bytes(&self, _recv: u64) {}
-}
+impl Metrics for Empty {}
