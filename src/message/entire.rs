@@ -1,37 +1,22 @@
-use crate::message::{Data, MessageHeader, MessageType};
-use crate::objectpool::Guard;
+use crate::message::{MessageHeader, MessageType};
 
 /// A single Message that is send between the Server and Client
 #[derive(Debug)]
 pub struct Message {
     header: MessageHeader,
-    data: Data<Vec<u8>>, // X bytes
+    data: Vec<u8>, // X bytes
 }
 
 impl Message {
     /// Creates a new Message with the given "raw" Data
     pub fn new(header: MessageHeader, data: Vec<u8>) -> Self {
-        Self {
-            header,
-            data: Data::Raw(data),
-        }
-    }
-
-    /// Creates a new Message with the given pooled/guarded Data
-    pub fn new_guarded(header: MessageHeader, data: Guard<Vec<u8>>) -> Self {
-        Self {
-            header,
-            data: Data::Pooled(data),
-        }
+        Self { header, data }
     }
 
     /// Serializes the Message into a Vector of Bytes that can
     /// then be send over to the other side (Server or Client)
     pub fn serialize(&self, header: &mut [u8; 13]) -> &[u8] {
-        let data = match self.data {
-            Data::Raw(ref r) => r,
-            Data::Pooled(ref p) => p,
-        };
+        let data = &self.data;
 
         self.header.serialize(header);
 
@@ -44,10 +29,7 @@ impl Message {
     }
     /// The Raw underlying data that belong to do this message
     pub fn get_data(&self) -> &[u8] {
-        match self.data {
-            Data::Raw(ref r) => &r,
-            Data::Pooled(ref p) => &p,
-        }
+        &self.data
     }
 
     /// Checks if the messsage is marked as an EOF(End-Of-File)

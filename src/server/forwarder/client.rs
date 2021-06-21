@@ -1,7 +1,6 @@
 use crate::{
     connections::Connections,
     message::{Message, MessageHeader, MessageType},
-    objectpool,
     server::{forwarder::ClientManager, user},
     streams::mpsc,
     Details,
@@ -128,13 +127,10 @@ impl Client {
         user_cons: Connections<mpsc::StreamWriter<Message>>,
         client_manager: std::sync::Arc<ClientManager>,
     ) {
-        let obj_pool: objectpool::Pool<Vec<u8>> = objectpool::Pool::new(100);
-
         let mut header_buffer = [0; 13];
         loop {
             if let Err(e) =
-                tokio_rx::receive(id, &mut read_con, &user_cons, &obj_pool, &mut header_buffer)
-                    .await
+                tokio_rx::receive(id, &mut read_con, &user_cons, &mut header_buffer).await
             {
                 error!("[{}] Receiving Client-Message: {:?}", id, e);
                 client_manager.remove(id);

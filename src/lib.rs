@@ -13,9 +13,6 @@ mod connections;
 pub use connections::Destination;
 /// Messages are used for all Communication between Server and Client
 pub mod message;
-/// A Generic Object-Pool that allows for easy reuse of Objects
-/// between actions
-pub(crate) mod objectpool;
 #[cfg(feature = "server")]
 pub mod server;
 mod streams;

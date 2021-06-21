@@ -2,12 +2,12 @@ use crate::client::connections::UserCon;
 use crate::client::user_con;
 use crate::general::ConnectionReader;
 use crate::streams::mpsc;
+use crate::Details;
 use crate::{
     client::Handler,
     message::{Message, MessageHeader, MessageType},
 };
 use crate::{connections::Connections, metrics::Metrics};
-use crate::{objectpool, Details};
 
 use std::sync::Arc;
 
@@ -28,8 +28,6 @@ struct SingleOptions<'a, R> {
     /// The Buffer that should be used for Deserializing the Header
     /// into it
     head_buf: &'a mut [u8; 13],
-    /// The Obeject Pool that should be used
-    obj_pool: &'a objectpool::Pool<Vec<u8>>,
 }
 
 /// Receives a single Message from the external Server and processes
@@ -111,11 +109,10 @@ where
     metrics.recv_bytes(header.get_length());
 
     let data_length = header.get_length() as usize;
-    let mut buf = opts.obj_pool.get();
-    buf.resize(data_length, 0);
+    let mut buf = vec![0; data_length];
 
     let msg = match opts.server_con.read_full(&mut buf).await {
-        Ok(_) => Message::new_guarded(header, buf),
+        Ok(_) => Message::new(header, buf),
         Err(e) => {
             error!("Receiving Data: {}", e);
             opts.client_cons.remove(id);
@@ -164,7 +161,6 @@ pub async fn receiver<R, H, M>(
     M: Metrics + Send + Sync,
 {
     let mut head_buf = [0; 13];
-    let obj_pool: objectpool::Pool<Vec<u8>> = objectpool::Pool::new(50);
 
     loop {
         let opts = SingleOptions {
@@ -172,7 +168,6 @@ pub async fn receiver<R, H, M>(
             send_queue: &send_queue,
             client_cons: &client_cons,
             head_buf: &mut head_buf,
-            obj_pool: &obj_pool,
         };
         if let Err(e) = receive_single(opts, handler.clone(), metrics.as_ref()).await {
             error!("Receiving: {:?}", e);
@@ -208,7 +203,6 @@ mod tests {
         client_cons.set(id, client_tx);
 
         let mut head_buf = [0; 13];
-        let obj_pool = objectpool::Pool::new(2);
 
         let result = receive_single(
             SingleOptions {
@@ -216,7 +210,6 @@ mod tests {
                 send_queue: &queue_tx,
                 client_cons: &client_cons,
                 head_buf: &mut head_buf,
-                obj_pool: &obj_pool,
             },
             Arc::new(client_mocks::EmptyHandler::new()),
             &Empty::new(),
@@ -251,7 +244,6 @@ mod tests {
         let client_cons = std::sync::Arc::new(Connections::<mpsc::StreamWriter<Message>>::new());
 
         let mut head_buf = [0; 13];
-        let obj_pool = objectpool::Pool::new(2);
 
         let result = receive_single(
             SingleOptions {
@@ -259,7 +251,6 @@ mod tests {
                 send_queue: &queue_tx,
                 client_cons: &client_cons,
                 head_buf: &mut head_buf,
-                obj_pool: &obj_pool,
             },
             Arc::new(client_mocks::EmptyHandler::new()),
             &Empty::new(),

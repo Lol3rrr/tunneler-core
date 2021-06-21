@@ -1,7 +1,6 @@
 use crate::connections::Connections;
 use crate::general::ConnectionReader;
 use crate::message::{Message, MessageHeader, MessageType};
-use crate::objectpool::Pool;
 use crate::streams::mpsc;
 
 #[cfg(test)]
@@ -24,7 +23,6 @@ pub async fn receive<C>(
     id: u32,
     read_con: &mut C,
     user_cons: &Connections<mpsc::StreamWriter<Message>>,
-    obj_pool: &Pool<Vec<u8>>,
     header_buf: &mut [u8; 13],
 ) -> Result<(), ReceiveError>
 where
@@ -72,13 +70,12 @@ where
     };
 
     let body_length = header.get_length() as usize;
-    let mut body_buf = obj_pool.get();
-    body_buf.resize(body_length, 0);
+    let mut body_buf = vec![0; body_length];
     if let Err(e) = read_con.read_full(&mut body_buf).await {
         error!("[{}][{}] Reading Body from Client: {}", id, user_id, e);
     }
 
-    if let Err(e) = stream.send(Message::new_guarded(header, body_buf)) {
+    if let Err(e) = stream.send(Message::new(header, body_buf)) {
         error!("[{}][{}] Adding to User-Queue: {}", id, user_id, e);
     }
     Ok(())
@@ -94,7 +91,6 @@ mod tests {
         let user_id = 15;
         let mut mock_con = MockReader::new();
         let user_cons = Connections::new();
-        let obj_pool = Pool::new(10);
         let mut header_buf = [0u8; 13];
 
         // Adding the test Message to the Connection
@@ -107,7 +103,7 @@ mod tests {
         let (client_tx, mut client_rx) = mpsc::stream();
         user_cons.set(user_id, client_tx);
 
-        let recv_result = receive(id, &mut mock_con, &user_cons, &obj_pool, &mut header_buf).await;
+        let recv_result = receive(id, &mut mock_con, &user_cons, &mut header_buf).await;
 
         assert_eq!(true, recv_result.is_ok());
         assert_eq!(
