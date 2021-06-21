@@ -85,9 +85,11 @@ where
             };
 
             // Setup the send channel for requests for this user
-            let (tx, handle_rx) = mpsc::stream();
+            let (tx, stream_rx) = mpsc::stream();
             // Add the Connection to the current map of user-connection
             opts.client_cons.set(id, tx);
+
+            let handle_rx = user_con::OwnedReceiver::new(stream_rx);
             let handle_tx =
                 user_con::OwnedSender::new(id, opts.send_queue.clone(), opts.client_cons.clone());
 
@@ -181,10 +183,12 @@ pub async fn receiver<R, H, M>(
 
 #[cfg(test)]
 mod tests {
+    use std::net::{IpAddr, Ipv4Addr};
+
     use super::*;
+    use crate::client::mocks as client_mocks;
     use crate::general::mocks;
     use crate::metrics::Empty;
-    use crate::{client::mocks as client_mocks, DetailsIP};
 
     #[tokio::test]
     async fn valid_sends_data_to_correct_handler() {
@@ -234,7 +238,7 @@ mod tests {
     async fn valid_establish_connection() {
         let id = 13;
 
-        let details = Details::new(DetailsIP::IPV4([0, 0, 0, 0])).serialize();
+        let details = Details::new(IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0]))).serialize();
 
         let mut tmp_reader = mocks::MockReader::new();
         tmp_reader.add_message(Message::new(

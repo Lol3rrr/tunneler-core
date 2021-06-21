@@ -8,6 +8,7 @@
 
 use crate::{
     connections::{Connections, Destination},
+    handshake,
     message::Message,
     metrics,
     metrics::Metrics,
@@ -23,8 +24,6 @@ pub use traits::*;
 use rand::RngCore;
 use std::sync::Arc;
 
-use self::connections::establish_connection::EstablishConnectionError;
-
 mod connections;
 mod heartbeat;
 
@@ -32,17 +31,23 @@ pub use connections::{user_con, UserCon};
 
 #[derive(Debug)]
 pub(crate) enum ConnectError {
-    Establish(EstablishConnectionError),
+    IO(std::io::Error),
+    Handshake(handshake::HandshakeError),
 }
 
-impl From<EstablishConnectionError> for ConnectError {
-    fn from(other: EstablishConnectionError) -> Self {
-        Self::Establish(other)
+impl From<std::io::Error> for ConnectError {
+    fn from(other: std::io::Error) -> Self {
+        Self::IO(other)
+    }
+}
+impl From<handshake::HandshakeError> for ConnectError {
+    fn from(other: handshake::HandshakeError) -> Self {
+        Self::Handshake(other)
     }
 }
 
-/// The Client instance in general that is responsible for handling
-/// all the interactions with the Server
+/// The Client instance itself, which connects to the configured Server-
+/// Instance and manages all the underlying communication with ther Server
 pub struct Client<M> {
     server_destination: Destination,
     external_port: u16,
@@ -55,7 +60,7 @@ impl Client<metrics::Empty> {
     /// connect to the given Server Destination and authenticate
     /// using the provided Key.
     ///
-    /// This uses an empty Metrics-Collector meaning that no metrics
+    /// This uses an empty Metrics-Collector, meaning that no metrics
     /// will be collected
     pub fn new(server: Destination, external_port: u16, key: Vec<u8>) -> Self {
         Self {
@@ -67,13 +72,32 @@ impl Client<metrics::Empty> {
     }
 }
 
+impl<M> Client<M> {
+    /// Calculates the Time that should be waited before retrying
+    fn exponential_backoff(
+        attempt: u32,
+        max_time: Option<std::time::Duration>,
+    ) -> std::time::Duration {
+        let raw_time = std::time::Duration::from_secs(2u64.pow(attempt));
+        let raw_jitter = rand::rngs::ThreadRng::default().next_u64() % 1000;
+        let raw_calced = raw_time.checked_add(std::time::Duration::from_millis(raw_jitter));
+
+        match (max_time, raw_calced) {
+            (Some(max), Some(calced)) if calced > max => max,
+            (_, Some(calced)) => calced,
+            (Some(max), _) => max,
+            _ => std::time::Duration::from_millis(0),
+        }
+    }
+}
+
 impl<M> Client<M>
 where
     M: Metrics + Send + Sync + 'static,
 {
     /// Behaves the same as the `new` implementation with the difference being
     /// that you can specify and provide your own Metrics-Collector.
-    pub fn new_metrics(
+    pub fn new_with_metrics(
         server: Destination,
         external_port: u16,
         key: Vec<u8>,
@@ -84,22 +108,6 @@ where
             external_port,
             key,
             metrics: Arc::new(metrics_collector),
-        }
-    }
-
-    /// Calculates the Time that should be waited before retrying
-    fn exponential_backoff(
-        attempt: u32,
-        max_time: Option<std::time::Duration>,
-    ) -> Option<std::time::Duration> {
-        let raw_time = std::time::Duration::from_secs(2u64.pow(attempt));
-        let calced_result = raw_time.checked_add(std::time::Duration::from_millis(
-            rand::rngs::ThreadRng::default().next_u64() % 1000,
-        ))?;
-
-        match max_time {
-            Some(max) if calced_result > max => Some(max),
-            _ => Some(calced_result),
         }
     }
 
@@ -114,20 +122,20 @@ where
     where
         H: Handler + Send + Sync + 'static,
     {
-        info!(
-            "Conneting to server: {}",
-            self.server_destination.get_full_address()
-        );
+        info!("Establishing Connection...");
 
-        let (read_con, write_con) = connections::establish_connection::establish_connection(
-            self.server_destination.get_full_address(),
-            &self.key,
-            self.external_port,
-        )
-        .await?
-        .into_split();
+        let target_addr = self.server_destination.get_full_address();
+        debug!("Conneting to server: {}", target_addr);
+        let mut connection = tokio::net::TcpStream::connect(target_addr).await?;
+        debug!("Connected to Server");
 
-        info!("Connected to server");
+        debug!("Starting Handshake...");
+        handshake::client::perform(&mut connection, &self.key, self.external_port).await?;
+        debug!("Performed Handshake");
+
+        let (read_con, write_con) = connection.into_split();
+
+        info!("Established Conection");
 
         let (queue_tx, queue_rx) = tokio::sync::mpsc::unbounded_channel();
         let outgoing = std::sync::Arc::new(Connections::<mpsc::StreamWriter<Message>>::new());
@@ -161,14 +169,10 @@ where
         Ok(())
     }
 
-    /// This starts the client and all the needed tasks
+    /// This starts up the Client to receive new Connections from the Server.
     ///
-    /// This function essentially never returns and should
-    /// therefor be run in an independant task
-    ///
-    /// The `start_handler` is only ever called once for every new connection in a
-    /// seperate tokio::Task
-    /// All Messages the Handler receives only Data or EOF Messages
+    /// The `handler` will be used to actually handle and "process" new
+    /// connections
     pub async fn start<H>(self, handler: Arc<H>) -> !
     where
         H: Handler + Send + Sync + 'static,
@@ -186,13 +190,12 @@ where
                     error!("Connecting: {:?}", e);
 
                     attempts += 1;
-                    if let Some(wait_time) = Self::exponential_backoff(
+                    let wait_time = Self::exponential_backoff(
                         attempts,
                         Some(std::time::Duration::from_secs(60)),
-                    ) {
-                        info!("Waiting {:?} before trying to connect again", wait_time);
-                        tokio::time::sleep(wait_time).await;
-                    }
+                    );
+                    info!("Waiting {:?} before trying to connect again", wait_time);
+                    tokio::time::sleep(wait_time).await;
                 }
             };
         }

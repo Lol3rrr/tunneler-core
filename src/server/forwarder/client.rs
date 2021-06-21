@@ -4,7 +4,7 @@ use crate::{
     objectpool,
     server::{forwarder::ClientManager, user},
     streams::mpsc,
-    Details, DetailsIP,
+    Details,
 };
 
 mod tokio_rx;
@@ -78,7 +78,7 @@ impl Client {
             }
         };
 
-        let ip_details = DetailsIP::from(peer_addr);
+        let ip_details = peer_addr.ip();
         let con_details = Details::new(ip_details);
 
         let details = con_details.serialize();

@@ -18,12 +18,11 @@ pub mod message;
 pub(crate) mod objectpool;
 #[cfg(feature = "server")]
 pub mod server;
-/// Provides all the Stream/Queue related functionality
-pub mod streams;
+mod streams;
 
 /// All the Metrics related functionality
 pub mod metrics;
 
 pub(crate) mod general;
-pub use general::{Details, DetailsIP};
+pub use general::Details;
 pub(crate) mod handshake;

@@ -7,7 +7,6 @@ use super::{Receiver, Sender};
 
 use async_trait::async_trait;
 
-pub mod establish_connection;
 pub mod rx;
 pub mod tx;
 
@@ -19,9 +18,10 @@ pub struct UserCon {
 }
 
 impl UserCon {
-    pub(crate) fn new(recv: mpsc::StreamReader<Message>, send: user_con::OwnedSender) -> Self {
+    /// Creates a new User-Connection with the given Sender and Receiver Parts
+    pub(crate) fn new(recv: user_con::OwnedReceiver, send: user_con::OwnedSender) -> Self {
         Self {
-            receiver: user_con::OwnedReceiver::new(recv),
+            receiver: recv,
             sender: send,
         }
     }

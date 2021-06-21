@@ -5,7 +5,7 @@ mod kind;
 pub use kind::MessageType;
 
 mod data;
-pub use data::Data;
+pub(crate) use data::Data;
 
 mod entire;
 pub use entire::Message;
