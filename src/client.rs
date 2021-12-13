@@ -129,8 +129,10 @@ where
         let mut connection = tokio::net::TcpStream::connect(target_addr).await?;
         debug!("Connected to Server");
 
+        let handshake_conf = handshake::Config::new(self.external_port);
+
         debug!("Starting Handshake...");
-        handshake::client::perform(&mut connection, &self.key, self.external_port).await?;
+        handshake::client::perform(&mut connection, &self.key, handshake_conf).await?;
         debug!("Performed Handshake");
 
         let (read_con, write_con) = connection.into_split();

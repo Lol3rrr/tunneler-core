@@ -1,3 +1,5 @@
+use super::ConfigError;
+
 /// The Errors that could be encountered during the Validation
 /// Phase of establishing a Connection
 #[derive(Debug)]
@@ -27,8 +29,8 @@ pub enum HandshakeError {
     MismatchedKeys,
     /// The Acknowledge-Message could not be send
     SendingAcknowledge(std::io::Error),
-    /// The Port-Message was malformed in some way
-    MalformedPort,
+    /// The Config-Message was malformed in some way
+    MalformedConfig(ConfigError),
     /// The received Port is not considered Valid
     InvalidPort,
 }

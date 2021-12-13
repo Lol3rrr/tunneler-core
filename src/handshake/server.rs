@@ -7,6 +7,8 @@ use crate::{
 use rand::rngs::OsRng;
 use rsa::{PaddingScheme, PublicKeyParts, RSAPrivateKey, RSAPublicKey};
 
+use super::Config;
+
 // The validation flow is like this
 //
 // 1. Client connects
@@ -19,7 +21,11 @@ use rsa::{PaddingScheme, PublicKeyParts, RSAPrivateKey, RSAPublicKey};
 // 7. Server validates the given Port
 // 7a. Valid: Sends ACK-Message back
 // 7b. Invalid: Closes the Connection
-pub async fn perform<C, V>(con: &mut C, key: &[u8], is_port_valid: V) -> Result<u16, HandshakeError>
+pub async fn perform<C, V>(
+    con: &mut C,
+    key: &[u8],
+    is_port_valid: V,
+) -> Result<Config, HandshakeError>
 where
     C: ConnectionReader + ConnectionWriter + Send,
     V: FnOnce(u16) -> bool,
@@ -92,24 +98,22 @@ where
         },
         Err(e) => return Err(HandshakeError::ReceivingMessage(e)),
     };
-    if *header.get_kind() != MessageType::Port {
+    if *header.get_kind() != MessageType::Config {
         return Err(HandshakeError::WrongResponseType);
     }
 
-    let port_length = header.get_length() as usize;
-    if port_length != 2 {
-        return Err(HandshakeError::MalformedPort);
-    }
-
-    let mut recv_port: [u8; 2] = [0, 0];
-    if let Err(e) = con.read_full(&mut recv_port).await {
+    let mut recv_buffer = vec![0; header.get_length() as usize];
+    if let Err(e) = con.read_full(&mut recv_buffer).await {
         return Err(HandshakeError::ReceivingMessage(e));
     }
 
-    let port = u16::from_be_bytes(recv_port);
+    let config = match Config::from_bytes(&recv_buffer) {
+        Ok(c) => c,
+        Err(e) => return Err(HandshakeError::MalformedConfig(e)),
+    };
 
     //  Step 7
-    if is_port_valid(port) {
+    if is_port_valid(config.port()) {
         // Step 7a
         let ack_header = MessageHeader::new(0, MessageType::Acknowledge, 0);
         let ack_msg = Message::new(ack_header, vec![]);
@@ -122,5 +126,5 @@ where
         return Err(HandshakeError::InvalidPort);
     }
 
-    Ok(port)
+    Ok(config)
 }

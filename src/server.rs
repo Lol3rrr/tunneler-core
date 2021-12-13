@@ -108,7 +108,7 @@ where
                 }
             };
 
-            let port = match handshake::server::perform(&mut client_socket, &self.key, |port| {
+            let conf = match handshake::server::perform(&mut client_socket, &self.key, |port| {
                 self.port_strategy.contains_port(port)
             })
             .await
@@ -120,13 +120,13 @@ where
                 }
             };
 
-            let clients = match ports.get(&port) {
+            let clients = match ports.get(&conf.port()) {
                 Some(c) => c.clone(),
                 None => {
                     // Create new Client-List for the Port and start a Forwarder for
                     // the Port as well
                     let tmp = Arc::new(ClientManager::new());
-                    let fwd = match Forwarder::new(port, tmp.clone()).await {
+                    let fwd = match Forwarder::new(conf.port(), tmp.clone()).await {
                         Ok(f) => f,
                         Err(e) => {
                             error!("Binding Forwader: {:?}", e);
@@ -135,7 +135,7 @@ where
                     };
                     tokio::task::spawn(fwd.start());
 
-                    ports.insert(port, tmp.clone());
+                    ports.insert(conf.port(), tmp.clone());
                     tmp
                 }
             };

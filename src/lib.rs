@@ -4,6 +4,15 @@
 //! other projects allowing you to expose your services running
 //! in a private network to be exposed through a public server
 
+/// The current Protocol-Version, which is used by this implementation
+///
+/// Version:
+/// * 0: This Version combines all the Versions before Version tracking for the Protcol was
+/// introduced
+/// * 1: The first Version of the tracked Protocol Version, which is compatible with the last
+/// Protcol of Version 0
+const PROTOCOL_VERSION: u16 = 1;
+
 #[macro_use]
 mod logging;
 

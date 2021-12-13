@@ -6,7 +6,9 @@ use crate::{
 
 use rsa::{BigUint, PaddingScheme, PublicKey, RSAPublicKey};
 
-pub async fn perform<C>(connection: &mut C, key: &[u8], port: u16) -> Result<(), HandshakeError>
+use super::Config;
+
+pub async fn perform<C>(connection: &mut C, key: &[u8], conf: Config) -> Result<(), HandshakeError>
 where
     C: ConnectionWriter + ConnectionReader + Send,
 {
@@ -67,10 +69,12 @@ where
         return Err(HandshakeError::WrongResponseType);
     }
 
-    let port_msg_header = MessageHeader::new(0, MessageType::Port, 2);
-    let port_msg = Message::new(port_msg_header, port.to_be_bytes().to_vec());
+    let config_msg_content = conf.to_bytes();
+    let config_msg_header =
+        MessageHeader::new(0, MessageType::Config, config_msg_content.len() as u64);
+    let config_msg = Message::new(config_msg_header, config_msg_content.to_vec());
 
-    if let Err(e) = connection.write_msg(&port_msg, &mut h_data).await {
+    if let Err(e) = connection.write_msg(&config_msg, &mut h_data).await {
         return Err(HandshakeError::SendingMessage(e));
     }
 
@@ -138,11 +142,13 @@ mod tests {
         ));
 
         let key_password = "test".as_bytes();
-        let port = 13;
+        let config = Config::new(13);
 
         assert_eq!(
             true,
-            perform(&mut connection, key_password, port).await.is_ok()
+            perform(&mut connection, key_password, config.clone())
+                .await
+                .is_ok()
         );
 
         let chunks = connection.writer_mut().chunks();
@@ -161,6 +167,6 @@ mod tests {
             *port_chunk_body.get(0).unwrap(),
             *port_chunk_body.get(1).unwrap(),
         ]);
-        assert_eq!(port, recv_port);
+        assert_eq!(config.port(), recv_port);
     }
 }

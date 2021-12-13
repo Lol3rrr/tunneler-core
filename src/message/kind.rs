@@ -31,10 +31,9 @@ pub enum MessageType {
     /// Signals the EOF from a request that is not yet closed
     EOF,
     /// This is the 5. message in the Handshake and is send by
-    /// the client along with an unsigned 16-bit number to
-    /// tell the server on which port it should listen for
-    /// user requests
-    Port,
+    /// the client along with other Data to inform the Server about the
+    /// desired Config to use
+    Config,
 }
 
 impl MessageType {
@@ -54,7 +53,7 @@ impl MessageType {
             7 => Some(MessageType::Verify),
             8 => Some(MessageType::Acknowledge),
             9 => Some(MessageType::EOF),
-            10 => Some(MessageType::Port),
+            10 => Some(MessageType::Config),
             _ => None,
         }
     }
@@ -72,7 +71,7 @@ impl MessageType {
             MessageType::Verify => 7,
             MessageType::Acknowledge => 8,
             MessageType::EOF => 9,
-            MessageType::Port => 10,
+            MessageType::Config => 10,
         }
     }
 }
