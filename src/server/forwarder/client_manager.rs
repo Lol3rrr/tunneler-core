@@ -85,6 +85,11 @@ impl ClientManager {
 
         drop(client_data);
     }
+
+    fn client_count(&self) -> u64 {
+        let clients = self.clients.lock().unwrap();
+        clients.len() as u64
+    }
 }
 
 #[cfg(test)]
