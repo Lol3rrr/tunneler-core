@@ -5,7 +5,7 @@ pub struct Connections<T>
 where
     T: Clone,
 {
-    connections: std::sync::Arc<DashMap<u32, T, fnv::FnvBuildHasher>>,
+    connections: std::sync::Arc<DashMap<u32, T, ahash::RandomState>>,
 }
 
 impl<T> Default for Connections<T>
@@ -23,7 +23,7 @@ where
 {
     pub fn new() -> Connections<T> {
         Connections {
-            connections: std::sync::Arc::new(DashMap::with_hasher(fnv::FnvBuildHasher::default())),
+            connections: std::sync::Arc::new(DashMap::default()),
         }
     }
 

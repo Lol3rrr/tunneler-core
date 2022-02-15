@@ -26,13 +26,12 @@ impl ClientManager {
     /// Returns a random Client from all currently connected
     /// Clients
     pub fn get(&self) -> Option<Client> {
-        if self.client_count() == 0 {
+        let clients_data = self.clients.lock().unwrap();
+        let raw_index = self.index.load(std::sync::atomic::Ordering::Relaxed);
+        let client_count = clients_data.len() as u64;
+        if client_count == 0 {
             return None;
         }
-
-        let clients_data = self.clients.lock().unwrap();
-        let raw_index = self.index.load(std::sync::atomic::Ordering::SeqCst);
-        let client_count = self.client_count.load(std::sync::atomic::Ordering::SeqCst);
 
         let index = raw_index % client_count;
         let client = clients_data.get(index as usize)?;
@@ -85,11 +84,6 @@ impl ClientManager {
         };
 
         drop(client_data);
-    }
-
-    /// Returns the number of currently connected clients
-    pub fn client_count(&self) -> u64 {
-        self.client_count.load(std::sync::atomic::Ordering::SeqCst)
     }
 }
 

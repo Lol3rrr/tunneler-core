@@ -22,15 +22,15 @@ tracing = { version = "0.1", optional = true }
 tracing-futures = { version = "0.2", optional = true }
 
 rand = { version = "0.7.0", features = ["getrandom", "small_rng"] }
-dashmap = { version = "4.0.2" }
+dashmap = { version = "5.1" }
 rsa = { version = "0.3.0" }
 base64 = { version = "0.13.0" }
-tokio = { version = "1.7", features = ["rt", "net", "io-util", "sync", "time"] }
-fnv = { version = "1.0.7" }
+tokio = { version = "1.16", features = ["rt", "net", "io-util", "sync", "time"] }
+ahash = { version = "0.7.6" }
 async-trait = "0.1.42"
 
 [dev-dependencies]
-tokio = { version = "1.7", features = ["rt", "rt-multi-thread", "net", "io-util", "sync", "time", "macros"] }
+tokio = { version = "1.16", features = ["rt", "rt-multi-thread", "net", "io-util", "sync", "time", "macros"] }
 criterion = "0.3"
 env_logger = "0.8.2"
 

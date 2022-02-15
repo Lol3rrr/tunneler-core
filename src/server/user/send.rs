@@ -25,7 +25,7 @@ where
     };
 
     let data = msg.get_data();
-    if let Err(e) = con.write_full(&data).await {
+    if let Err(e) = con.write_full(data).await {
         error!("[{}][{}] Sending to User: {}", client_id, user_id, e);
         return false;
     }

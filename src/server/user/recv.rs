@@ -56,6 +56,7 @@ pub async fn recv<F, C>(
                     break;
                 }
             }
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
             Err(e) => {
                 error!("[{}][{}] Reading from User-Con: {}", client_id, user_id, e);
                 break;
