@@ -19,13 +19,13 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
-mod forwarder;
-use forwarder::{Client, ClientManager};
+mod tcpforwarder;
+use tcpforwarder::{Client, ClientManager};
 mod ports;
 mod user;
 
-use forwarder::Forwarder;
 pub use ports::Strategy;
+use tcpforwarder::TCPForwarder;
 
 /// Holds all information needed to creating and running
 /// a single Tunneler-Server
@@ -126,7 +126,7 @@ where
                     // Create new Client-List for the Port and start a Forwarder for
                     // the Port as well
                     let tmp = Arc::new(ClientManager::new());
-                    let fwd = match Forwarder::new(conf.port(), tmp.clone()).await {
+                    let fwd = match TCPForwarder::new(conf.port(), tmp.clone()).await {
                         Ok(f) => f,
                         Err(e) => {
                             error!("Binding Forwader: {:?}", e);

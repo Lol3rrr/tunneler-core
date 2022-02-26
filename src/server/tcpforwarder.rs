@@ -7,10 +7,10 @@ pub use client::Client;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
-/// The Forwarder is the actual Part that accepts User-Connections
+/// The TCP-Forwarder is the actual Part that accepts User-Connections
 /// and then forwards them to one of the Clients that listen on that
 /// port
-pub struct Forwarder {
+pub struct TCPForwarder {
     /// The External Port where users connect to
     user_port: u16,
     /// The Listener of the Forwarder
@@ -20,7 +20,7 @@ pub struct Forwarder {
     clients: Arc<ClientManager>,
 }
 
-impl Forwarder {
+impl TCPForwarder {
     /// Creates a new Forwarder
     ///
     /// # Params:
@@ -46,7 +46,7 @@ impl Forwarder {
 
         // Accepting User-Requests
         loop {
-            let socket = match self.listener.accept().await {
+            let user_socket = match self.listener.accept().await {
                 Ok((raw_socket, _)) => raw_socket,
                 Err(e) => {
                     error!("[{}] Accepting Req-Connection: {}", self.user_port, e);
@@ -54,6 +54,7 @@ impl Forwarder {
                 }
             };
 
+            // Get a connect Client for this new User Connection
             let client = match self.clients.get() {
                 Some(c) => c,
                 None => {
@@ -63,7 +64,7 @@ impl Forwarder {
             };
 
             id = id.wrapping_add(1);
-            client.new_con(id, socket);
+            client.new_con(id, user_socket);
         }
     }
 }

@@ -27,11 +27,12 @@ impl ClientManager {
     /// Clients
     pub fn get(&self) -> Option<Client> {
         let clients_data = self.clients.lock().unwrap();
-        let raw_index = self.index.load(std::sync::atomic::Ordering::Relaxed);
-        let client_count = clients_data.len() as u64;
-        if client_count == 0 {
+        if clients_data.is_empty() {
             return None;
         }
+
+        let raw_index = self.index.load(std::sync::atomic::Ordering::Relaxed);
+        let client_count = clients_data.len() as u64;
 
         let index = raw_index % client_count;
         let client = clients_data.get(index as usize)?;
@@ -86,6 +87,7 @@ impl ClientManager {
         drop(client_data);
     }
 
+    #[cfg(test)]
     fn client_count(&self) -> u64 {
         let clients = self.clients.lock().unwrap();
         clients.len() as u64
