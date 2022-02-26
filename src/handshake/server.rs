@@ -2,6 +2,7 @@ use crate::{
     general::{ConnectionReader, ConnectionWriter},
     handshake::HandshakeError,
     message::{Message, MessageHeader, MessageType},
+    PROTOCOL_VERSION,
 };
 
 use rand::rngs::OsRng;
@@ -124,6 +125,14 @@ where
     } else {
         // Step  7b
         return Err(HandshakeError::InvalidPort);
+    }
+
+    // Check the Protocol Version for Compatibility
+    if config.protocol_version() > PROTOCOL_VERSION + 1 {
+        return Err(HandshakeError::MismatchedProtocol {
+            current: PROTOCOL_VERSION,
+            other: config.protocol_version(),
+        });
     }
 
     Ok(config)

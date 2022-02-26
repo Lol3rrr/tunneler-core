@@ -33,4 +33,8 @@ pub enum HandshakeError {
     MalformedConfig(ConfigError),
     /// The received Port is not considered Valid
     InvalidPort,
+    MismatchedProtocol {
+        current: u16,
+        other: u16,
+    },
 }
