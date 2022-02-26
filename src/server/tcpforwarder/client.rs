@@ -16,7 +16,6 @@ mod tokio_tx;
 pub struct Client {
     id: u32,
     user_cons: Connections<mpsc::StreamWriter<Message>>,
-    client_manager: std::sync::Arc<ClientManager>,
     client_send_queue: tokio::sync::mpsc::UnboundedSender<Message>,
 }
 
@@ -24,13 +23,12 @@ impl Client {
     /// Creates a new Client that is then ready to start up
     pub fn new(
         id: u32,
-        client_manager: std::sync::Arc<ClientManager>,
+        _client_manager: std::sync::Arc<ClientManager>,
         send_queue: tokio::sync::mpsc::UnboundedSender<Message>,
     ) -> Client {
         Client {
             id,
             user_cons: Connections::new(),
-            client_manager,
             client_send_queue: send_queue,
         }
     }
@@ -83,10 +81,11 @@ impl Client {
         let details = con_details.serialize();
 
         // Notify the client of the new connection
-        if let Err(e) = self.client_send_queue.send(Message::new(
+        let n_con_msg = Message::new(
             MessageHeader::new(user_id, MessageType::Connect, details.len() as u64),
             details,
-        )) {
+        );
+        if let Err(e) = self.client_send_queue.send(n_con_msg) {
             error!(
                 "[{}][{}] Sending Connect message: {:?}",
                 self.id, user_id, e
