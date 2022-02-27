@@ -1,5 +1,5 @@
 use crate::client::connections::UserCon;
-use crate::client::user_con;
+use crate::client::{OwnedReceiver, OwnedSender};
 use crate::general::ConnectionReader;
 use crate::streams::mpsc;
 use crate::Details;
@@ -87,9 +87,8 @@ where
             // Add the Connection to the current map of user-connection
             opts.client_cons.set(id, tx);
 
-            let handle_rx = user_con::OwnedReceiver::new(stream_rx);
-            let handle_tx =
-                user_con::OwnedSender::new(id, opts.send_queue.clone(), opts.client_cons.clone());
+            let handle_rx = OwnedReceiver::new(stream_rx);
+            let handle_tx = OwnedSender::new(id, opts.send_queue.clone(), opts.client_cons.clone());
 
             let handle_con = UserCon::new(handle_rx, handle_tx);
             tokio::task::spawn(H::new_con(handler, id, details, handle_con));

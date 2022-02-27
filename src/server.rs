@@ -34,7 +34,7 @@ use tcpforwarder::TCPForwarder;
 
 /// Holds all information needed to creating and running
 /// a single Tunneler-Server
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct Server<M> {
     listen_port: u32,
     port_strategy: Strategy,

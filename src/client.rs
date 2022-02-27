@@ -29,7 +29,10 @@ pub use builder::ClientBuilder;
 mod connections;
 mod heartbeat;
 
-pub use connections::{user_con, UserCon};
+pub use connections::{
+    user_con::{OwnedReceiver, OwnedSender},
+    UserCon,
+};
 
 #[derive(Debug)]
 pub(crate) enum ConnectError {

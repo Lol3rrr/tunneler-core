@@ -33,6 +33,8 @@ impl ServerBuilder<BuilderEmpty> {
     }
 
     /// Sets the listen Port for the Server
+    ///
+    /// This will be the Port where Clients bind to *NOT* the Port for User Connections
     pub fn listen_port(self, port: u32) -> ServerBuilder<BuilderListenPort> {
         ServerBuilder {
             state: BuilderListenPort { port },
@@ -48,6 +50,8 @@ impl Default for ServerBuilder<BuilderEmpty> {
 
 impl ServerBuilder<BuilderListenPort> {
     /// Sets the Port Strategy for the Server
+    ///
+    /// This will be used to determine which Ports should be opened for User Connections
     pub fn port_strategy(self, strategy: Strategy) -> ServerBuilder<BuilderPortStrategy> {
         ServerBuilder {
             state: BuilderPortStrategy {
@@ -60,6 +64,8 @@ impl ServerBuilder<BuilderListenPort> {
 
 impl ServerBuilder<BuilderPortStrategy> {
     /// Sets the Key for the Server
+    ///
+    /// This is used for "authenticating" User
     pub fn key(self, key: Vec<u8>) -> ServerBuilder<BuilderKey> {
         ServerBuilder {
             state: BuilderKey {

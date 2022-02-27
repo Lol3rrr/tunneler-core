@@ -1,6 +1,7 @@
+use std::fmt::Debug;
+
 /// The Strategy used to determine if a given Port is valid
 /// according to the Strategy and its parameters
-#[derive(Debug, PartialEq)]
 pub enum Strategy {
     /// Only the given Port is accepted and
     /// every other one is rejected
@@ -8,7 +9,23 @@ pub enum Strategy {
     /// Accepts the Ports in the Vector
     Multiple(Vec<u16>),
     /// Accepts all the Ports in the Range
-    Dynamic(Option<std::ops::Range<u16>>),
+    Ranged(std::ops::Range<u16>),
+    /// Accepts all the Ports to be open
+    Always,
+    /// This allows you to specify whatever strategy you need
+    Custom(Box<dyn Send + Sync + Fn(u16) -> bool>),
+}
+
+impl Debug for Strategy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Single(port) => f.debug_tuple("Single").field(&port).finish(),
+            Self::Multiple(ports) => f.debug_tuple("Multiple").field(&ports).finish(),
+            Self::Ranged(range) => f.debug_tuple("Ranged").field(&range).finish(),
+            Self::Always => f.debug_tuple("Always").finish(),
+            Self::Custom(_) => f.debug_tuple("Custom").finish(),
+        }
+    }
 }
 
 impl Strategy {
@@ -18,10 +35,9 @@ impl Strategy {
         match self {
             Self::Single(tmp) => *tmp == port,
             Self::Multiple(tmp) => tmp.contains(&port),
-            Self::Dynamic(tmp) => match tmp {
-                Some(range) => range.contains(&port),
-                None => true,
-            },
+            Self::Ranged(range) => range.contains(&port),
+            Self::Always => true,
+            Self::Custom(func) => func(port),
         }
     }
 }
@@ -53,18 +69,19 @@ mod tests {
     }
 
     #[test]
-    fn dynamic_valid() {
-        let strat = Strategy::Dynamic(None);
+    fn ranged_range_valid() {
+        let strat = Strategy::Ranged(10..15);
         assert_eq!(true, strat.contains_port(13));
     }
     #[test]
-    fn dynamic_range_valid() {
-        let strat = Strategy::Dynamic(Some(10..15));
-        assert_eq!(true, strat.contains_port(13));
-    }
-    #[test]
-    fn dynamic_range_invalid() {
-        let strat = Strategy::Dynamic(Some(10..51));
+    fn ranged_range_invalid() {
+        let strat = Strategy::Ranged(10..51);
         assert_eq!(false, strat.contains_port(52));
+    }
+
+    #[test]
+    fn always_valid() {
+        let strat = Strategy::Always;
+        assert_eq!(true, strat.contains_port(1312));
     }
 }

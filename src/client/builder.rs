@@ -31,6 +31,9 @@ impl ClientBuilder<Empty> {
     }
 
     /// Sets the Destination for the Client
+    ///
+    /// This describes the Destination on where the external Server is listening on for Clients to
+    /// connect to *NOT* the Users.
     pub fn destination(self, dest: Destination) -> ClientBuilder<BuilderDestination> {
         ClientBuilder {
             state: BuilderDestination { dest },
@@ -46,6 +49,9 @@ impl Default for ClientBuilder<Empty> {
 
 impl ClientBuilder<BuilderDestination> {
     /// Sets the External Port for the Client
+    ///
+    /// The External Port is the Port on which the external Server should listen on for the User
+    /// Connections that will then be forwarded to this Client
     pub fn external_port(self, port: u16) -> ClientBuilder<BuilderExternalPort> {
         ClientBuilder {
             state: BuilderExternalPort {
@@ -58,6 +64,9 @@ impl ClientBuilder<BuilderDestination> {
 
 impl ClientBuilder<BuilderExternalPort> {
     /// Sets the Key for the Client
+    ///
+    /// The Key is used for authenticating with the Server to make sure that only trusted Clients
+    /// can connect to the Server
     pub fn key(self, key: Vec<u8>) -> ClientBuilder<BuilderKey> {
         ClientBuilder {
             state: BuilderKey {
