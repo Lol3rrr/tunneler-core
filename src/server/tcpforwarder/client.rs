@@ -13,20 +13,20 @@ mod tokio_tx;
 ///
 /// All User-Connections are handled by an instance of this Struct
 #[derive(Clone, Debug)]
-pub struct Client {
+pub struct TCPClient {
     id: u32,
     user_cons: Connections<mpsc::StreamWriter<Message>>,
     client_send_queue: tokio::sync::mpsc::UnboundedSender<Message>,
 }
 
-impl Client {
+impl TCPClient {
     /// Creates a new Client that is then ready to start up
     pub fn new(
         id: u32,
-        _client_manager: std::sync::Arc<ClientManager<Client>>,
+        _client_manager: std::sync::Arc<ClientManager<Self>>,
         send_queue: tokio::sync::mpsc::UnboundedSender<Message>,
-    ) -> Client {
-        Client {
+    ) -> Self {
+        Self {
             id,
             user_cons: Connections::new(),
             client_send_queue: send_queue,
@@ -107,7 +107,7 @@ impl Client {
             user_id,
             read_con,
             self.client_send_queue.clone(),
-            Client::close_user_connection(user_id, client_id, cloned_cons, send_queue),
+            Self::close_user_connection(user_id, client_id, cloned_cons, send_queue),
         ));
     }
 
@@ -124,7 +124,7 @@ impl Client {
         id: u32,
         mut read_con: tokio::net::tcp::OwnedReadHalf,
         user_cons: Connections<mpsc::StreamWriter<Message>>,
-        client_manager: std::sync::Arc<ClientManager<Client>>,
+        client_manager: std::sync::Arc<ClientManager<Self>>,
     ) {
         let mut header_buffer = [0; 13];
         loop {
@@ -150,7 +150,7 @@ impl Client {
         id: u32,
         mut write_con: tokio::net::tcp::OwnedWriteHalf,
         mut queue: tokio::sync::mpsc::UnboundedReceiver<Message>,
-        client_manager: std::sync::Arc<ClientManager<Client>>,
+        client_manager: std::sync::Arc<ClientManager<Self>>,
     ) {
         let mut h_data = [0; 13];
         loop {
@@ -163,7 +163,7 @@ impl Client {
     }
 }
 
-impl super::super::clientmanager::Client for Client {
+impl super::super::clientmanager::Client for TCPClient {
     fn id(&self) -> u32 {
         self.get_id()
     }
@@ -178,7 +178,7 @@ mod tests {
         let manager_arc = std::sync::Arc::new(ClientManager::new());
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
 
-        let client = Client::new(123, manager_arc, tx);
+        let client = TCPClient::new(123, manager_arc, tx);
 
         assert_eq!(123, client.get_id());
     }

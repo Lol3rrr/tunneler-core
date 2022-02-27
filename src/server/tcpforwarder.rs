@@ -1,5 +1,5 @@
 mod client;
-pub use client::Client;
+pub use client::TCPClient;
 
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -16,7 +16,7 @@ pub struct TCPForwarder {
     listener: TcpListener,
     /// All the Clients that want to receive connections from this
     /// instance
-    clients: Arc<ClientManager<Client>>,
+    clients: Arc<ClientManager<TCPClient>>,
 }
 
 impl TCPForwarder {
@@ -27,7 +27,7 @@ impl TCPForwarder {
     /// * 'clients': The List of Clients for this Port/Forwarder
     pub async fn new(
         port: u16,
-        clients: Arc<ClientManager<Client>>,
+        clients: Arc<ClientManager<TCPClient>>,
     ) -> Result<Self, std::io::Error> {
         let bind_addr = format!("0.0.0.0:{}", port);
         let listener = TcpListener::bind(&bind_addr).await?;
