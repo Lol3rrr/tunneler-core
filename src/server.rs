@@ -12,7 +12,7 @@
 //! Users and forwarding them to a given Client and managing their Data
 //! exchange for the entire lifetime of the connection
 
-use crate::{handshake, metrics, metrics::Metrics};
+use crate::{handshake, metrics::Metrics};
 
 use rand::Rng;
 use std::collections::BTreeMap;
@@ -25,6 +25,9 @@ mod clientmanager;
 use clientmanager::ClientManager;
 mod ports;
 mod user;
+
+mod builder;
+pub use builder::ServerBuilder;
 
 pub use ports::Strategy;
 use tcpforwarder::TCPForwarder;
@@ -39,43 +42,15 @@ pub struct Server<M> {
     metrics: Arc<M>,
 }
 
-impl Server<metrics::Empty> {
-    /// Creates a new Server-Instance from the given Data
-    ///
-    /// Params:
-    /// * listen_port: The Port clients will connect to
-    /// * port_strategy: The Strategy to determine if a port a client wants to use is valid
-    /// * key: The Key/Password clients need to connect to the server
-    pub fn new(listen_port: u32, port_strategy: Strategy, key: Vec<u8>) -> Self {
-        Self::new_metrics(listen_port, port_strategy, key, metrics::Empty::new())
-    }
+/// Creates a new Builder to construct a new Server Instance
+pub fn builder() -> ServerBuilder<builder::BuilderEmpty> {
+    ServerBuilder::new()
 }
 
 impl<M> Server<M>
 where
     M: Metrics,
 {
-    /// Creates a new Server-Instance from the given Data
-    ///
-    /// Params:
-    /// * listen_port: The Port clients will connect to
-    /// * port_strategy: The Strategy to determine if a port a client wants to use is valid
-    /// * key: The Key/Password clients need to connect to the server
-    /// * p_metrics: The Metrics-Collector to use
-    pub fn new_metrics(
-        listen_port: u32,
-        port_strategy: Strategy,
-        key: Vec<u8>,
-        p_metrics: M,
-    ) -> Self {
-        Self {
-            listen_port,
-            port_strategy,
-            key,
-            metrics: Arc::new(p_metrics),
-        }
-    }
-
     /// Actually starts the Server and starts listening for incoming Connections from
     /// both users and clients.
     ///
@@ -162,23 +137,5 @@ where
 
             clients.add(client);
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn new_server() {
-        assert_eq!(
-            Server {
-                listen_port: 8080,
-                port_strategy: Strategy::Single(12),
-                key: vec![2, 3, 1],
-                metrics: Arc::new(metrics::Empty::new()),
-            },
-            Server::new(8080, Strategy::Single(12), vec![2, 3, 1])
-        );
     }
 }

@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
 use tunneler_core::client::{Handler, Sender, UserCon};
-use tunneler_core::{
-    server::{Server, Strategy},
-    Details,
-};
+use tunneler_core::{server::Strategy, Details};
 
 use async_trait::async_trait;
 
@@ -22,7 +19,12 @@ fn main() {
     println!("Starting...");
 
     let key = vec![b'a', b'b', b'c', b'd', b'e'];
-    let server = Server::new(8081, Strategy::Single(8080), key.clone());
+    let server = tunneler_core::server::builder()
+        .listen_port(8081)
+        .port_strategy(Strategy::Single(8080))
+        .key(key.clone())
+        .empty_metrics()
+        .build();
 
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_io()

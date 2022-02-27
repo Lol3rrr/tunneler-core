@@ -61,8 +61,7 @@ impl Config {
             x if x < 4 => 0,
             _ => {
                 let prot_bytes = &raw[2..4];
-                let prot = u16::from_be_bytes(prot_bytes.try_into().unwrap());
-                prot
+                u16::from_be_bytes(prot_bytes.try_into().unwrap())
             }
         };
 

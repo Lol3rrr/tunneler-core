@@ -48,7 +48,7 @@ where
     M: Metrics + Send + Sync,
 {
     let header = match opts.server_con.read_full(opts.head_buf).await {
-        Ok(_) => match MessageHeader::deserialize(&opts.head_buf) {
+        Ok(_) => match MessageHeader::deserialize(opts.head_buf) {
             Some(s) => s,
             None => return Err(ReceiveError::DeserializingHeader),
         },
