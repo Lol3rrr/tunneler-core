@@ -10,7 +10,6 @@ use crate::{
     connections::{Connections, Destination},
     handshake,
     message::Message,
-    metrics,
     metrics::Metrics,
     streams::mpsc,
 };
@@ -23,6 +22,9 @@ pub use traits::*;
 
 use rand::RngCore;
 use std::sync::Arc;
+
+mod builder;
+pub use builder::ClientBuilder;
 
 mod connections;
 mod heartbeat;
@@ -55,21 +57,9 @@ pub struct Client<M> {
     metrics: Arc<M>,
 }
 
-impl Client<metrics::Empty> {
-    /// Creates a new Client instance that is configured to
-    /// connect to the given Server Destination and authenticate
-    /// using the provided Key.
-    ///
-    /// This uses an empty Metrics-Collector, meaning that no metrics
-    /// will be collected
-    pub fn new(server: Destination, external_port: u16, key: Vec<u8>) -> Self {
-        Self {
-            server_destination: server,
-            external_port,
-            key,
-            metrics: Arc::new(metrics::Empty::new()),
-        }
-    }
+/// Creates a new Builder to create a Client
+pub fn builder() -> builder::ClientBuilder<builder::Empty> {
+    builder::ClientBuilder::new()
 }
 
 impl<M> Client<M> {
@@ -95,22 +85,6 @@ impl<M> Client<M>
 where
     M: Metrics + Send + Sync + 'static,
 {
-    /// Behaves the same as the `new` implementation with the difference being
-    /// that you can specify and provide your own Metrics-Collector.
-    pub fn new_with_metrics(
-        server: Destination,
-        external_port: u16,
-        key: Vec<u8>,
-        metrics_collector: M,
-    ) -> Self {
-        Self {
-            server_destination: server,
-            external_port,
-            key,
-            metrics: Arc::new(metrics_collector),
-        }
-    }
-
     /// Establishes and then also runs a new Connection
     ///
     /// # Behaviour

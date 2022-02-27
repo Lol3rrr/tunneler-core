@@ -33,7 +33,12 @@ fn main() {
     rt.spawn(server.listen());
 
     let destination = tunneler_core::Destination::new("localhost".to_owned(), 8081);
-    let client = tunneler_core::client::Client::new(destination, 8080, key);
+    let client = tunneler_core::client::builder()
+        .destination(destination)
+        .external_port(8080)
+        .key(key)
+        .empty_metrics()
+        .build();
 
     rt.block_on(client.start(Arc::new(ExampleHandler {})));
 }
