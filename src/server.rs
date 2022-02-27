@@ -20,7 +20,9 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 
 mod tcpforwarder;
-use tcpforwarder::{Client, ClientManager};
+use tcpforwarder::Client;
+mod clientmanager;
+use clientmanager::ClientManager;
 mod ports;
 mod user;
 
@@ -95,7 +97,7 @@ where
 
         info!("Listening for Clients on: {}", listen_bind_addr);
 
-        let mut ports: BTreeMap<u16, Arc<ClientManager>> = BTreeMap::new();
+        let mut ports: BTreeMap<u16, Arc<ClientManager<Client>>> = BTreeMap::new();
 
         // Accept new Clients
         loop {

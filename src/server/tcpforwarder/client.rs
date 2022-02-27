@@ -23,7 +23,7 @@ impl Client {
     /// Creates a new Client that is then ready to start up
     pub fn new(
         id: u32,
-        _client_manager: std::sync::Arc<ClientManager>,
+        _client_manager: std::sync::Arc<ClientManager<Client>>,
         send_queue: tokio::sync::mpsc::UnboundedSender<Message>,
     ) -> Client {
         Client {
@@ -124,7 +124,7 @@ impl Client {
         id: u32,
         mut read_con: tokio::net::tcp::OwnedReadHalf,
         user_cons: Connections<mpsc::StreamWriter<Message>>,
-        client_manager: std::sync::Arc<ClientManager>,
+        client_manager: std::sync::Arc<ClientManager<Client>>,
     ) {
         let mut header_buffer = [0; 13];
         loop {
@@ -150,7 +150,7 @@ impl Client {
         id: u32,
         mut write_con: tokio::net::tcp::OwnedWriteHalf,
         mut queue: tokio::sync::mpsc::UnboundedReceiver<Message>,
-        client_manager: std::sync::Arc<ClientManager>,
+        client_manager: std::sync::Arc<ClientManager<Client>>,
     ) {
         let mut h_data = [0; 13];
         loop {
@@ -160,6 +160,12 @@ impl Client {
                 return;
             }
         }
+    }
+}
+
+impl super::super::clientmanager::Client for Client {
+    fn id(&self) -> u32 {
+        self.get_id()
     }
 }
 

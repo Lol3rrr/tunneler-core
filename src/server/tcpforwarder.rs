@@ -1,11 +1,10 @@
-mod client_manager;
-pub use client_manager::ClientManager;
-
 mod client;
 pub use client::Client;
 
 use std::sync::Arc;
 use tokio::net::TcpListener;
+
+use super::clientmanager::ClientManager;
 
 /// The TCP-Forwarder is the actual Part that accepts User-Connections
 /// and then forwards them to one of the Clients that listen on that
@@ -17,7 +16,7 @@ pub struct TCPForwarder {
     listener: TcpListener,
     /// All the Clients that want to receive connections from this
     /// instance
-    clients: Arc<ClientManager>,
+    clients: Arc<ClientManager<Client>>,
 }
 
 impl TCPForwarder {
@@ -26,7 +25,10 @@ impl TCPForwarder {
     /// # Params:
     /// * 'port': The Public facing User-Port
     /// * 'clients': The List of Clients for this Port/Forwarder
-    pub async fn new(port: u16, clients: Arc<ClientManager>) -> Result<Self, std::io::Error> {
+    pub async fn new(
+        port: u16,
+        clients: Arc<ClientManager<Client>>,
+    ) -> Result<Self, std::io::Error> {
         let bind_addr = format!("0.0.0.0:{}", port);
         let listener = TcpListener::bind(&bind_addr).await?;
 
